@@ -22,8 +22,10 @@ const JobMap = ({ destination, coords, onClose, t }: { destination: string, coor
         <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#0f172a' }}>📍 {t.jobRoute}</div>
         <button onClick={onClose} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
       </div>
-      <div style={{ width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}><iframe width="100%" height="100%" frameBorder="0" src={mapUrl}></iframe></div>
-      <button onClick={() => window.open(nativeUrl, '_blank')} style={{ width: '100%', background: '#000', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>{t.navMap}</button>
+      <div style={{ width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
+        <iframe width="100%" height="100%" frameBorder="0" src={mapUrl} title="Job Map"></iframe>
+      </div>
+      <button onClick={() => window.open(nativeUrl, '_blank', 'noopener,noreferrer')} style={{ width: '100%', background: '#000', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>{t.navMap}</button>
     </div>
   );
 };
@@ -108,7 +110,7 @@ export default function LabourDashboardApp() {
       vipPrime: "👑 VIP Prime बनें", vipDesc: "3 गुना ज़्यादा सीधे काम पाएं!", getNow: "अभी लें",
       alerts: {
         reqFail: "कृपया सभी जानकारी भरें!", jobAccept: "✅ काम स्वीकार कर लिया गया!", invPin: "❌ गलत PIN! (ग्राहक के मोबाइल के आखिरी 6 अंक)",
-        jobStart: "✅ काम चालू हो गया!", upPics: "कृपया काम की तीनों फोटो अपलोड करें।", jobComp: "✅ काम पूरा हुआ! पैसे आपके वॉलेट में जोड़ दिए गए हैं।",
+        jobStart: "✅ काम चालू हो गया!", upPics: "कृपया काम की तीनों फोटो अपलोड करें।", jobComp: "✅ काम पूरा हुआ! पैसे आपके वॉलेट में जोड़ दिए गए हैं।",
         entUpi: "कृपया अपनी UPI ID डालें!", entAmt: "कृपया सही रकम डालें!", noBal: "आपके वॉलेट में इतना बैलेंस नहीं है!", wdSent: "✅ निकासी की रिक्वेस्ट एडमिन को भेज दी गई है!",
         msgSent: "✅ आपका मैसेज एडमिन को भेज दिया गया है!", pwdWrong: "पुराना पासवर्ड गलत है!", pwdMatch: "नया पासवर्ड मैच नहीं हो रहा!", pwdSucc: "✅ आपका पासवर्ड बदल गया है!",
         upSucc: "✅ फोटो अपलोड सफल!", reqUtr: "कृपया पेमेंट का UTR / Transaction No. डालें!",
@@ -407,7 +409,7 @@ export default function LabourDashboardApp() {
           <div class="rule-item"><strong>EN:</strong> Smoking, drinking, or using abusive language is strictly prohibited.<br/><strong>HI:</strong> धूम्रपान, मदिरापान या अभद्र भाषा का प्रयोग करना पूरी तरह वर्जित है।</div>
 
           <div class="rules-title">2. Job Execution & Safety / काम और सुरक्षा</div>
-          <div class="rule-item"><strong>EN:</strong> Always verify customer PIN before starting work and upload mandatory Start, Mid, and End photos.<br/><strong>HI:</strong> काम शुरू करने से पहले ग्राहक से PIN ज़रूर लें और शुरू, बीच तथा खत्म होने की फोटो अपलोड करें।</div>
+          <div class="rule-item"><strong>EN:</strong> Always verify customer PIN before starting work and upload mandatory Start, Mid, and End photos.<br/><strong>HI:</strong> काम शुरू करने से पहले ग्राहक से PIN ज़रूर लें और शुरू, बीच तथा खत्म होने की फोटो अपलोड करें।</div>
 
           <div class="rules-title">3. Penalties & Jurmana / जुर्माने के नियम</div>
           <div class="fine-box">
@@ -419,7 +421,7 @@ export default function LabourDashboardApp() {
         <script>window.onload = function() { setTimeout(() => window.print(), 500); }</script>
       </body></html>
     `;
-    const w = window.open('', '_blank'); w?.document.write(printContent); w?.document.close();
+    const w = window.open('', '_blank', 'noopener,noreferrer'); w?.document.write(printContent); w?.document.close();
   };
 
   const handleAcceptJob = async () => {
@@ -577,7 +579,7 @@ export default function LabourDashboardApp() {
              💳 ₹{walletBalance}
           </div>
           {workerProfile.profile_pic ? (
-            <img src={workerProfile.profile_pic} style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0' }} />
+            <img src={workerProfile.profile_pic} style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0' }} alt="Profile" />
           ) : (
             <div style={{ width: '38px', height: '38px', background: '#f1f5f9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>👤</div>
           )}
@@ -677,7 +679,7 @@ export default function LabourDashboardApp() {
                               {job.work_in_pic ? t.uploaded : t.upload}
                               <input type="file" hidden accept="image/*" onChange={e => e.target.files?.[0] && handleJobPhotoUpload(job.id, e.target.files[0], 'work_in_pic')} />
                             </label>
-                            {job.work_in_pic && <a href={job.work_in_pic} target="_blank" style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 'bold' }}>👁️ View</a>}
+                            {job.work_in_pic && <a href={job.work_in_pic} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 'bold' }}>👁️ View</a>}
                           </div>
 
                           <div style={{ flex: 1, textAlign: 'center' }}>
@@ -685,7 +687,7 @@ export default function LabourDashboardApp() {
                               {job.work_out_pic ? t.uploaded : t.upload}
                               <input type="file" hidden accept="image/*" onChange={e => e.target.files?.[0] && handleJobPhotoUpload(job.id, e.target.files[0], 'work_out_pic')} />
                             </label>
-                            {job.work_out_pic && <a href={job.work_out_pic} target="_blank" style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 'bold' }}>👁️ View</a>}
+                            {job.work_out_pic && <a href={job.work_out_pic} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 'bold' }}>👁️ View</a>}
                           </div>
 
                           <div style={{ flex: 1, textAlign: 'center' }}>
@@ -693,7 +695,7 @@ export default function LabourDashboardApp() {
                               {job.completed_work_pic ? t.uploaded : t.upload}
                               <input type="file" hidden accept="image/*" onChange={e => e.target.files?.[0] && handleJobPhotoUpload(job.id, e.target.files[0], 'completed_work_pic')} />
                             </label>
-                            {job.completed_work_pic && <a href={job.completed_work_pic} target="_blank" style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 'bold' }}>👁️ View</a>}
+                            {job.completed_work_pic && <a href={job.completed_work_pic} target="_blank" rel="noopener noreferrer" style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 'bold' }}>👁️ View</a>}
                           </div>
                         </div>
                         {uploadingJobPic === job.id && <div style={{textAlign: 'center', fontSize: '11px', color: '#d97706', marginBottom: '10px', fontWeight: 'bold'}}>Uploading photo... please wait.</div>}
@@ -735,9 +737,9 @@ export default function LabourDashboardApp() {
                     </div>
                     
                     <div style={{ display: 'flex', gap: '10px' }}>
-                      {job.work_in_pic ? <a href={job.work_in_pic} target="_blank" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 Start Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No Start Pic</div>}
-                      {job.work_out_pic ? <a href={job.work_out_pic} target="_blank" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 Mid Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No Mid Pic</div>}
-                      {job.completed_work_pic ? <a href={job.completed_work_pic} target="_blank" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 End Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No End Pic</div>}
+                      {job.work_in_pic ? <a href={job.work_in_pic} target="_blank" rel="noopener noreferrer" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 Start Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No Start Pic</div>}
+                      {job.work_out_pic ? <a href={job.work_out_pic} target="_blank" rel="noopener noreferrer" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 Mid Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No Mid Pic</div>}
+                      {job.completed_work_pic ? <a href={job.completed_work_pic} target="_blank" rel="noopener noreferrer" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 End Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No End Pic</div>}
                     </div>
                   </div>
                 )}
@@ -787,7 +789,7 @@ export default function LabourDashboardApp() {
             
             <div style={{ background: 'white', padding: '20px', borderRadius: '16px', marginBottom: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-                {workerProfile.profile_pic && <img src={workerProfile.profile_pic} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 10px auto', border: '2px solid #e2e8f0' }} />}
+                {workerProfile.profile_pic && <img src={workerProfile.profile_pic} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 10px auto', border: '2px solid #e2e8f0' }} alt="Profile" />}
                 <h2 style={{ margin: 0 }}>{workerProfile.name}</h2>
                 <p style={{ color: '#64748b', fontWeight: 'bold', margin: '4px 0' }}>+91 {workerProfile.phone}</p>
               </div>
@@ -884,7 +886,7 @@ export default function LabourDashboardApp() {
         <div style={modalOverlay}>
           <div style={modalContent}>
             <h3>Professional ID Card & Kit (₹200)</h3>
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=${idCardUpi}&pn=Admin&am=200&cu=INR`} style={{ width: '150px', display: 'block', margin: '10px auto' }} />
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=${idCardUpi}&pn=Admin&am=200&cu=INR`} alt="QR Code" style={{ width: '150px', display: 'block', margin: '10px auto' }} />
             <input type="text" placeholder="Enter UTR No." value={utrNumber} onChange={e => setUtrNumber(e.target.value)} style={inputStyle} />
             <button onClick={() => processPaymentSuccess('id_card')} style={btnStyle}>Submit UTR</button>
             <button onClick={() => setShowIdPayment(false)} style={{...btnStyle, background: '#ccc', marginTop: '6px'}}>{t.cancel}</button>
@@ -896,7 +898,7 @@ export default function LabourDashboardApp() {
         <div style={modalOverlay}>
           <div style={modalContent}>
             <h3>VIP Prime Membership (₹499)</h3>
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=${premiumUpi}&pn=Admin&am=499&cu=INR`} style={{ width: '150px', display: 'block', margin: '10px auto' }} />
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=${premiumUpi}&pn=Admin&am=499&cu=INR`} alt="QR Code" style={{ width: '150px', display: 'block', margin: '10px auto' }} />
             <input type="text" placeholder="Enter UTR No." value={utrNumber} onChange={e => setUtrNumber(e.target.value)} style={inputStyle} />
             <button onClick={() => processPaymentSuccess('prime')} style={btnStyle}>Submit UTR</button>
             <button onClick={() => setShowPrimePayment(false)} style={{...btnStyle, background: '#ccc', marginTop: '6px'}}>{t.cancel}</button>
