@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT"https://pscjrxinuezsjumybuza.supabase.co "||;
-const supabaseAnonKey = process.env.NEXT_"sb_publishable_rHK6HsACswJM96HNRstYKQ_3MzY_y4b"||;
+// हमने process.env हटा दिया है ताकि Vercel की गलत सेटिंग कोड को क्रैश न कर पाए
+const supabaseUrl = "https://pscjrxinuezsjumybuza.supabase.co";
+const supabaseAnonKey = "sb_publishable_rHK6HsACswJM96HNRstYKQ_3MzY_y4b";
 
-export const supabase = createClient(finalUrl, key);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
