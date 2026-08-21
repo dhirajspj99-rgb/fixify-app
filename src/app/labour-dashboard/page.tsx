@@ -19,13 +19,13 @@ const JobMap = ({ destination, coords, onClose, t }: { destination: string, coor
   return (
     <div style={{ marginTop: '10px', padding: '12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#0f172a' }}>📍 {t.jobRoute}</div>
-        <button onClick={onClose} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
+        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#0f172a' }}>📍 {t.jobRoute}</div>
+        <button onClick={onClose} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>{t.closeMap}</button>
       </div>
-      <div style={{ width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
+      <div style={{ width: '100%', height: '180px', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
         <iframe width="100%" height="100%" frameBorder="0" src={mapUrl} title="Job Map"></iframe>
       </div>
-      <button onClick={() => window.open(nativeUrl, '_blank', 'noopener,noreferrer')} style={{ width: '100%', background: '#000', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>{t.navMap}</button>
+      <button onClick={() => window.open(nativeUrl, '_blank', 'noopener,noreferrer')} style={{ width: '100%', background: '#2563eb', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>{t.navMap}</button>
     </div>
   );
 };
@@ -72,6 +72,7 @@ export default function LabourDashboardApp() {
 
   // Modals Data
   const [chatJob, setChatJob] = useState<any>(null);
+  const [mapJob, setMapJob] = useState<any>(null); // Map Modal State Added
   const [negotiatedPrice, setNegotiatedPrice] = useState('');
   const [acceptDate, setAcceptDate] = useState('');
   const [acceptTime, setAcceptTime] = useState('');
@@ -88,11 +89,11 @@ export default function LabourDashboardApp() {
 
   const [historySearchQuery, setHistorySearchQuery] = useState('');
 
-  // 100% BILINGUAL DICTIONARY
+  // BILINGUAL DICTIONARY
   const translations = {
     hi: {
       loginTitle: "लेबर / मिस्त्री लॉगिन", phoneLabel: "मोबाइल नंबर", passLabel: "पासवर्ड", loginBtn: "लॉगिन करें",
-      refresh: "रिफ्रेश", callCust: "ग्राहक को कॉल करें", viewMap: "🗺️ रास्ता देखें", jobRoute: "काम का रास्ता", closeMap: "❌ मैप बंद करें", navMap: "🧭 मैप से रास्ता देखें",
+      refresh: "रिफ्रेश", callCust: "ग्राहक को कॉल करें", viewMap: "🗺️ रास्ता देखें", jobRoute: "काम का रास्ता", closeMap: "❌ मैप बंद करें", navMap: "🧭 गूगल मैप खोलें",
       emptyNew: "📭 अभी आपकी स्किल से मैच करता कोई नया काम नहीं है।", emptyActive: "📭 अभी कोई चालू काम नहीं है।", emptyHistory: "📭 कोई पुराना रिकॉर्ड नहीं मिला।",
       custName: "ग्राहक:", loc: "पता:", acceptBtn: "काम स्वीकार करें", negoBtn: "बातचीत / रेट तय करें",
       pinMsg: "काम शुरू करने के लिए ग्राहक से 6-अंकीय PIN पूछें", pinBtn: "PIN डालें और काम शुरू करें",
@@ -119,7 +120,7 @@ export default function LabourDashboardApp() {
     },
     en: {
       loginTitle: "Labour / Worker Login", phoneLabel: "Mobile Number", passLabel: "Password", loginBtn: "LOGIN",
-      refresh: "Refresh", callCust: "Call Customer", viewMap: "🗺️ View Route", jobRoute: "Job Location", closeMap: "❌ Close Map", navMap: "🧭 Navigate",
+      refresh: "Refresh", callCust: "Call Customer", viewMap: "🗺️ View Route", jobRoute: "Job Location", closeMap: "❌ Close Map", navMap: "🧭 Open Google Maps",
       emptyNew: "📭 No new jobs matching your skills.", emptyActive: "📭 No active jobs.", emptyHistory: "📭 No history found.",
       custName: "Customer:", loc: "Address:", acceptBtn: "Accept Job", negoBtn: "Negotiate / Quote Rate",
       pinMsg: "Ask Customer for 6-Digit PIN to start", pinBtn: "Verify PIN & Start Job",
@@ -161,7 +162,7 @@ export default function LabourDashboardApp() {
   };
 
   const fetchLiveGPS = () => {
-    if (navigator.geolocation) {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setWorkerCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
         (err) => console.warn("GPS Failed", err),
@@ -182,10 +183,8 @@ export default function LabourDashboardApp() {
     } catch (e) { console.log("Settings Error:", e); }
   };
 
-  // 🔥 CORE FIX: Completely Safe DB Fetching 🔥
   const fetchMyWalletAndJobs = async (passedWorkerId: any, wPhone: string) => {
     try {
-      // 1. Get confirmed Worker Data from Database
       const { data: wData, error } = await supabase.from('labours').select('*').eq('phone', wPhone.trim()).maybeSingle();
       
       if (error || !wData) {
@@ -194,7 +193,7 @@ export default function LabourDashboardApp() {
         return;
       }
       
-      const validWorkerId = wData.id; // GUARANTEED CORRECT ID from DB
+      const validWorkerId = wData.id;
       
       setWorkerProfile(wData);
       setNewAddress(wData.address || '');
@@ -209,27 +208,20 @@ export default function LabourDashboardApp() {
       if (typeof msgs === 'string') { try { msgs = JSON.parse(msgs); } catch(e) { msgs = []; } }
       setChatMessages(Array.isArray(msgs) ? msgs : []);
 
-      // 2. Fetch Wallet Transactions safely
       const { data: txData, error: txErr } = await supabase
         .from('wallet_transactions')
         .select('*')
         .eq('labour_id', validWorkerId)
         .order('created_at', { ascending: false });
       
-      if (txErr) {
-        console.error("History Error Details:", txErr.message || txErr);
-      } else if (txData) {
-        setWalletTransactions(txData);
-      }
+      if (!txErr && txData) setWalletTransactions(txData);
 
-      // 3. Fetch Jobs Safely
       const cleanPhone = wPhone.trim();
       const { data: jobData } = await supabase.from('labour_bookings').select('*').order('created_at', { ascending: false });
       if (jobData) {
         const relevantJobs = jobData.filter(j => !j.assigned_to || String(j.assigned_to).trim() === cleanPhone || String(j.worker_id) === String(validWorkerId));
         setJobs(relevantJobs);
       }
-
     } catch (err) { 
       console.warn("Global Data Fetch Error:", err); 
     }
@@ -237,13 +229,15 @@ export default function LabourDashboardApp() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const storedSession = localStorage.getItem('fixifiy_labour');
+      const storedSession = typeof window !== 'undefined' ? localStorage.getItem('fixifiy_labour') : null;
       if (storedSession) {
         try {
           const parsedWorker = JSON.parse(storedSession);
           await fetchMyWalletAndJobs(parsedWorker.id, parsedWorker.phone);
           fetchLiveGPS();
-        } catch(e) { localStorage.removeItem('fixifiy_labour'); }
+        } catch(e) { 
+          if(typeof window !== 'undefined') localStorage.removeItem('fixifiy_labour'); 
+        }
       }
       setIsCheckingAuth(false);
       fetchAdminSettings();
@@ -397,7 +391,6 @@ export default function LabourDashboardApp() {
             </div>
           </div>
         </div>
-
         <div class="page">
           <div class="header">
             <h1>FIXIFIY</h1>
@@ -628,7 +621,12 @@ export default function LabourDashboardApp() {
                       <strong>{t.custName}</strong> {job.customer_name}<br/>
                       <strong>{t.loc}</strong> {fullAddress}
                     </div>
-                    {custPhone && <button onClick={() => openSecureCall(custPhone)} style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', marginBottom: '10px' }}>📞 {t.callCust}</button>}
+                    
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                      {custPhone && <button onClick={() => openSecureCall(custPhone)} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>📞 {t.callCust}</button>}
+                      <button onClick={() => setMapJob(job)} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>{t.viewMap}</button>
+                    </div>
+
                     <button onClick={() => { setChatJob(job); setNegotiatedPrice(String(job.total_amount||'')); setAcceptDate(''); setAcceptTime(''); }} style={{ width: '100%', padding: '14px', background: isDirect ? '#000' : '#f8fafc', color: isDirect ? 'white' : '#000', border: isDirect ? 'none' : '2px solid #cbd5e1', borderRadius: '10px', fontWeight: '900', fontSize: '14px', cursor: 'pointer' }}>{isDirect ? t.acceptBtn : t.negoBtn}</button>
                   </div>
                 )}
@@ -661,7 +659,11 @@ export default function LabourDashboardApp() {
                 {isExpanded && (
                   <div style={{ marginTop: '15px', borderTop: '1px dashed #e2e8f0', paddingTop: '15px' }}>
                     <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', marginBottom: '12px', fontSize: '13px' }}><strong>{t.loc}</strong> {fullAddress}</div>
-                    {custPhone && <button onClick={() => openSecureCall(custPhone)} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', marginBottom: '15px' }}>📞 {t.callCust}</button>}
+                    
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                      {custPhone && <button onClick={() => openSecureCall(custPhone)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>📞 {t.callCust}</button>}
+                      <button onClick={() => setMapJob(job)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>{t.viewMap}</button>
+                    </div>
                     
                     {!isStarted ? (
                       <div style={{ background: '#fffbeb', padding: '15px', borderRadius: '12px', border: '1px solid #fde68a', textAlign: 'center' }}>
@@ -881,6 +883,20 @@ export default function LabourDashboardApp() {
           );
         })}
       </div>
+
+      {/* Map Modal */}
+      {mapJob && (
+        <div style={modalOverlay}>
+          <div style={{ ...modalContent, maxWidth: '400px' }}>
+            <JobMap 
+              destination={`${mapJob.address || ''} ${mapJob.block || ''} ${mapJob.district || ''}`.trim()} 
+              coords={workerCoords} 
+              onClose={() => setMapJob(null)} 
+              t={t} 
+            />
+          </div>
+        </div>
+      )}
 
       {showIdPayment && (
         <div style={modalOverlay}>

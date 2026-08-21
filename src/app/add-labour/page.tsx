@@ -1,8 +1,9 @@
 "use client";
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient("APNA_URL", "APNA_KEY");
+// Yeh line aapki root folder wali supabase.js file ko connect karti hai.
+// (Agar path ka error aaye, toh '../../supabase' ki jagah '../supabase' try kijiyega)
+import { supabase } from '../../supabase'; 
 
 export default function AddLabour() {
   const [name, setName] = useState('');
@@ -10,6 +11,12 @@ export default function AddLabour() {
   const [wage, setWage] = useState('');
 
   async function saveLabour() {
+    // Chhota sa check taaki khali details save na hon
+    if (!name || !phone || !wage) {
+      alert("Bhai, saari details bharna zaroori hai!");
+      return;
+    }
+
     const { error } = await supabase.from('labours').insert([
       { name: name, phone: phone, daily_wage: wage }
     ]);
@@ -18,17 +25,47 @@ export default function AddLabour() {
       alert("Error: " + error.message);
     } else {
       alert("Labour Successfully Added! 🎉");
-      setName(''); setPhone(''); setWage('');
+      // Form ko wapas khali karne ke liye
+      setName(''); 
+      setPhone(''); 
+      setWage('');
     }
   }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Naya Labour Add Karein</h1>
-      <input placeholder="Labour ka Naam" onChange={(e) => setName(e.target.value)} value={name} />
-      <input placeholder="Mobile Number" onChange={(e) => setPhone(e.target.value)} value={phone} />
-      <input placeholder="Roj ki Dihadi (Wage)" type="number" onChange={(e) => setWage(e.target.value)} value={wage} />
-      <button onClick={saveLabour}>Save Labour</button>
+    <div style={{ padding: '20px', maxWidth: '400px', margin: 'auto' }}>
+      <h2>Naya Labour Add Karein</h2>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
+        <input 
+          placeholder="Labour ka Naam" 
+          onChange={(e) => setName(e.target.value)} 
+          value={name} 
+          style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
+        />
+        
+        <input 
+          placeholder="Mobile Number" 
+          onChange={(e) => setPhone(e.target.value)} 
+          value={phone} 
+          style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
+        />
+        
+        <input 
+          placeholder="Roj ki Dihadi (Wage)" 
+          type="number" 
+          onChange={(e) => setWage(e.target.value)} 
+          value={wage} 
+          style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
+        />
+        
+        <button 
+          onClick={saveLabour}
+          style={{ padding: '10px', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Save Labour
+        </button>
+      </div>
     </div>
   );
 }
