@@ -127,7 +127,6 @@ function LoginContent() {
     if (!cleanPhone || cleanPhone.length !== 10) {
       alert(t("Enter a valid 10-digit mobile number.", "कृपया सही 10-अंकीय मोबाइल नंबर डालें।")); return;
     }
-    
     setLoading(true);
 
     let checkTable = 'customers';
@@ -136,7 +135,6 @@ function LoginContent() {
     else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
 
     const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', cleanPhone);
-    
     if (error || !data || data.length === 0) {
       setLoading(false);
       alert(t("⚠️ Mobile number not found! Please Sign Up.", "⚠️ यह नंबर रजिस्टर नहीं है! कृपया नया अकाउंट बनाएं।"));
@@ -206,7 +204,6 @@ function LoginContent() {
     if (isAdmin) { handleAdminLogin(); return; }
 
     setLoading(true);
-    
     let targetPhone = !isLogin ? phoneNumber : loginId;
     targetPhone = targetPhone.replace(/\D/g, ''); 
     if (targetPhone.length > 10) targetPhone = targetPhone.slice(-10); 
@@ -256,6 +253,7 @@ function LoginContent() {
     }
   };
 
+  // 🔥 OTP VERIFICATION & DASHBOARD DATA FETCHING (FIXED)
   const handleVerifyOtpAndProcess = async () => {
     if (otp.length !== 6) { alert(t("Enter valid 6-digit OTP!", "कृपया सही 6-अंकीय OTP डालें!")); return; }
     setLoading(true);
@@ -300,31 +298,38 @@ function LoginContent() {
         let targetUrl = '/'; 
 
         if (role === 'customer') {
-          const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).single();
+          const { data, error } = await supabase.from('customers').select('*').eq('phone', checkPhone).maybeSingle();
           if (data) {
             userFound = true;
             localStorage.setItem('fixifiy_customer', JSON.stringify(data));
             targetUrl = '/customer-dashboard'; 
           }
-        } else {
-          const checkTable = role.toLowerCase().includes('shop') ? 'shops' : 'labours';
-          const { data: dbData } = await supabase.from(checkTable).select('*').eq('phone', checkPhone).single();
+        } else if (role.toLowerCase().includes('shop')) {
+          const { data: dbData, error } = await supabase.from('shops').select('*').eq('phone', checkPhone).maybeSingle();
           if (dbData) {
             if (dbData.status === 'Pending') { await supabase.auth.signOut(); alert(t("⏳ Account is Pending.", "⏳ आपका अकाउंट अभी पेंडिंग है।")); setLoading(false); return; }
             if (dbData.status === 'Suspended') { await supabase.auth.signOut(); alert(t("🚫 Account is Suspended.", "🚫 आपका अकाउंट सस्पेंड है।")); setLoading(false); return; }
             
             userFound = true;
+            localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
+            targetUrl = '/shop-owner-dashboard'; 
+          }
+        } else if (role.toLowerCase().includes('labour')) {
+          const { data: dbData, error } = await supabase.from('labours').select('*').eq('phone', checkPhone).maybeSingle();
+          if (dbData) {
+            if (dbData.status === 'Pending') { await supabase.auth.signOut(); alert(t("⏳ Account is Pending.", "⏳ आपका अकाउंट अभी पेंडिंग है।")); setLoading(false); return; }
+            if (dbData.status === 'Suspended') { await supabase.auth.signOut(); alert(t("🚫 Account is Suspended.", "🚫 आपका अकाउंट सस्पेंड है।")); setLoading(false); return; }
             
-            if (role.toLowerCase().includes('labour')) {
-               localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
-               targetUrl = '/labour-dashboard'; 
-            } else if (role.toLowerCase().includes('shop')) {
-               localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
-               targetUrl = '/shop-owner-dashboard'; 
-            } else if (role.toLowerCase().includes('delivery')) {
-               localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
-               targetUrl = '/delivery'; 
-            }
+            userFound = true;
+            localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
+            targetUrl = '/labour-dashboard'; 
+          }
+        } else if (role.toLowerCase().includes('delivery')) {
+          const { data: dbData, error } = await supabase.from('delivery_boys').select('*').eq('phone', checkPhone).maybeSingle();
+          if (dbData) {
+            userFound = true;
+            localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
+            targetUrl = '/delivery'; 
           }
         }
 
@@ -337,8 +342,12 @@ function LoginContent() {
         alert(t("Login Successful via OTP!", "OTP के ज़रिये लॉगिन सफल!")); 
         router.push(targetUrl);
       }
-    } catch (err: any) { alert(t("Verification Failed: Invalid OTP", "वेरिफिकेशन फेल: गलत OTP")); } 
-    finally { setLoading(false); }
+    } catch (err: any) { 
+      console.error("OTP verification error:", err);
+      alert(t("Verification Failed: Invalid OTP", "वेरिफिकेशन फेल: गलत OTP")); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handlePasswordLogin = async () => {
@@ -387,31 +396,38 @@ function LoginContent() {
     let targetUrl = '/'; 
 
     if (role === 'customer') {
-      const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).single();
+      const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).maybeSingle();
       if (data) {
         userFound = true;
         localStorage.setItem('fixifiy_customer', JSON.stringify(data)); 
         targetUrl = '/customer-dashboard'; 
       }
-    } else {
-      const checkTable = role.toLowerCase().includes('shop') ? 'shops' : 'labours';
-      const { data: dbData } = await supabase.from(checkTable).select('*').eq('phone', checkPhone).single();
+    } else if (role.toLowerCase().includes('shop')) {
+      const { data: dbData } = await supabase.from('shops').select('*').eq('phone', checkPhone).maybeSingle();
       if (dbData) {
         if (dbData.status === 'Pending') { await supabase.auth.signOut(); alert(t("⏳ Account is Pending.", "⏳ आपका अकाउंट पेंडिंग है।")); setLoading(false); return; } 
         else if (dbData.status === 'Suspended') { await supabase.auth.signOut(); alert(t("🚫 Account is Suspended.", "🚫 आपका अकाउंट सस्पेंड है।")); setLoading(false); return; }
         
         userFound = true;
-
-        if (role.toLowerCase().includes('labour')) {
-           localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
-           targetUrl = '/labour-dashboard'; 
-        } else if (role.toLowerCase().includes('shop')) {
-           localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
-           targetUrl = '/shop-owner-dashboard'; 
-        } else if (role.toLowerCase().includes('delivery')) {
-           localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
-           targetUrl = '/delivery'; 
-        }
+        localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
+        targetUrl = '/shop-owner-dashboard'; 
+      }
+    } else if (role.toLowerCase().includes('labour')) {
+      const { data: dbData } = await supabase.from('labours').select('*').eq('phone', checkPhone).maybeSingle();
+      if (dbData) {
+        if (dbData.status === 'Pending') { await supabase.auth.signOut(); alert(t("⏳ Account is Pending.", "⏳ आपका अकाउंट पेंडिंग है।")); setLoading(false); return; } 
+        else if (dbData.status === 'Suspended') { await supabase.auth.signOut(); alert(t("🚫 Account is Suspended.", "🚫 आपका अकाउंट सस्पेंड है।")); setLoading(false); return; }
+        
+        userFound = true;
+        localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
+        targetUrl = '/labour-dashboard'; 
+      }
+    } else if (role.toLowerCase().includes('delivery')) {
+      const { data: dbData } = await supabase.from('delivery_boys').select('*').eq('phone', checkPhone).maybeSingle();
+      if (dbData) {
+        userFound = true;
+        localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
+        targetUrl = '/delivery'; 
       }
     }
 
