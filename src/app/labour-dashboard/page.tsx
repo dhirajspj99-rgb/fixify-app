@@ -41,7 +41,7 @@ export default function LabourDashboardApp() {
 
   const [lang, setLang] = useState<'hi' | 'en'>('hi');
   const [activeTab, setActiveTab] = useState<'new_jobs' | 'active_work' | 'history' | 'wallet' | 'profile'>('new_jobs');
-  
+
   const [jobs, setJobs] = useState<any[]>([]);
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
 
@@ -55,7 +55,7 @@ export default function LabourDashboardApp() {
   const [showIdPayment, setShowIdPayment] = useState(false);
   const [showPrimePayment, setShowPrimePayment] = useState(false);
   const [utrNumber, setUtrNumber] = useState('');
-  
+
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingJobPic, setUploadingJobPic] = useState<number | null>(null); 
 
@@ -81,7 +81,7 @@ export default function LabourDashboardApp() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawUpi, setWithdrawUpi] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -183,18 +183,22 @@ export default function LabourDashboardApp() {
     } catch (e) { console.log("Settings Error:", e); }
   };
 
+  // 🔥 Yahan hum local storage ko hamesha latest database record se sync karenge 🔥
   const fetchMyWalletAndJobs = async (passedWorkerId: any, wPhone: string) => {
     try {
       const { data: wData, error } = await supabase.from('labours').select('*').eq('phone', wPhone.trim()).maybeSingle();
-      
+
       if (error || !wData) {
         localStorage.removeItem('fixifiy_labour');
         setWorkerProfile(null);
         return;
       }
-      
+
+      // Sync latest data to localStorage
+      localStorage.setItem('fixifiy_labour', JSON.stringify(wData));
+
       const validWorkerId = wData.id;
-      
+
       setWorkerProfile(wData);
       setNewAddress(wData.address || '');
       setWalletBalance(Number(wData.balance) || 0);
@@ -213,7 +217,7 @@ export default function LabourDashboardApp() {
         .select('*')
         .eq('labour_id', validWorkerId)
         .order('created_at', { ascending: false });
-      
+
       if (!txErr && txData) setWalletTransactions(txData);
 
       const cleanPhone = wPhone.trim();
@@ -227,18 +231,37 @@ export default function LabourDashboardApp() {
     }
   };
 
+  // 🔥 OTP + Password dono ke data ko detect karne ke liye NEW UseEffect 🔥
   useEffect(() => {
     const checkSession = async () => {
+      // 🚀 STEP 1: Pehle LocalStorage Check Karo (OTP Login walon ke liye)
+      let phoneNo = '';
       const storedSession = typeof window !== 'undefined' ? localStorage.getItem('fixifiy_labour') : null;
       if (storedSession) {
         try {
-          const parsedWorker = JSON.parse(storedSession);
-          await fetchMyWalletAndJobs(parsedWorker.id, parsedWorker.phone);
-          fetchLiveGPS();
-        } catch(e) { 
-          if(typeof window !== 'undefined') localStorage.removeItem('fixifiy_labour'); 
-        }
+           phoneNo = JSON.parse(storedSession).phone;
+        } catch(e) {}
       }
+
+      // 🚀 STEP 2: Agar LocalStorage mein phone nahi mila, tab Supabase Session check karo
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!phoneNo && session?.user) {
+          let sessionPhone = session.user.email?.replace('@fixifiy.in', '').replace(/[^0-9]/g, '');
+          if (sessionPhone && sessionPhone.startsWith('91') && sessionPhone.length === 12) {
+              sessionPhone = sessionPhone.substring(2);
+          }
+          phoneNo = sessionPhone || '';
+      }
+
+      // 🚀 STEP 3: Phone number mil gaya, toh Database se latest details nikal lo
+      if (phoneNo) {
+          await fetchMyWalletAndJobs(null, phoneNo);
+          fetchLiveGPS();
+      } else {
+          // not logged in
+          setWorkerProfile(null);
+      }
+
       setIsCheckingAuth(false);
       fetchAdminSettings();
     };
@@ -248,23 +271,24 @@ export default function LabourDashboardApp() {
   const handleLogin = async () => {
     setLoginError('');
     if (!phone || !password) return setLoginError(lang === 'hi' ? "मोबाइल नंबर और पासवर्ड भरें।" : "Phone & Password required.");
-    
+
     const finalEmail = `${phone.trim()}@fixifiy.in`;
     const { error: authErr } = await supabase.auth.signInWithPassword({ email: finalEmail, password: password.trim() });
     if (authErr) return setLoginError(lang === 'hi' ? "❌ गलत आईडी या पासवर्ड!" : "❌ Invalid ID or Password!");
-    
+
     const { data, error } = await supabase.from('labours').select('*').eq('phone', phone.trim()).maybeSingle(); 
     if (error || !data) return setLoginError(lang === 'hi' ? "अकाउंट नहीं मिला।" : "Account not found.");
     if (data.status === 'Suspended') return setLoginError(lang === 'hi' ? "आपका अकाउंट सस्पेंड है।" : "Account suspended.");
-    
+
     localStorage.setItem('fixifiy_labour', JSON.stringify(data));
     setWorkerProfile(data);
     fetchMyWalletAndJobs(data.id, data.phone);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (!window.confirm(t.logout + "?")) return;
-    localStorage.removeItem('fixifiy_labour');
+    localStorage.removeItem('fixifiy_labour'); // Clear local data
+    await supabase.auth.signOut(); // Clear Supabase session
     setWorkerProfile(null);
   };
 
@@ -278,13 +302,13 @@ export default function LabourDashboardApp() {
     try {
       const ext = file.name.split('.').pop();
       const fn = `${workerProfile.id}_${type}_${Date.now()}.${ext}`;
-      
+
       await supabase.storage.from('labour_documents').upload(fn, file);
       const url = supabase.storage.from('labour_documents').getPublicUrl(fn).data.publicUrl;
-      
+
       await supabase.from('labours').update({ [type]: url }).eq('id', workerProfile.id);
       setWorkerProfile((prev: any) => ({ ...prev, [type]: url }));
-      
+
       await fetchMyWalletAndJobs(workerProfile.id, workerProfile.phone);
       alert(t.alerts.upSucc);
     } catch (e:any) { alert("Upload Error: " + e.message); }
@@ -296,12 +320,12 @@ export default function LabourDashboardApp() {
     try {
       const ext = file.name.split('.').pop();
       const fn = `job_${jobId}_${photoType}_${Date.now()}.${ext}`;
-      
+
       const { error: uploadError } = await supabase.storage.from('labour_documents').upload(fn, file);
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('labour_documents').getPublicUrl(fn);
-      
+
       const { error: updateError } = await supabase.from('labour_bookings').update({ [photoType]: urlData.publicUrl }).eq('id', jobId);
       if (updateError) throw updateError;
 
@@ -396,7 +420,7 @@ export default function LabourDashboardApp() {
             <h1>FIXIFIY</h1>
             <span style="font-size:12px; font-weight:bold; color:#16a34a;">RULES & REGULATIONS / नियम और शर्तें</span>
           </div>
-          
+
           <div class="rules-title">1. Code of Conduct / आचार संहिता</div>
           <div class="rule-item"><strong>EN:</strong> Partners must maintain hygiene, polite behavior, and clean attire at customer premises.<br/><strong>HI:</strong> पार्टनर को ग्राहक के घर पर साफ-सफाई, विनम्र व्यवहार और साफ कपड़े पहनकर जाना होगा।</div>
           <div class="rule-item"><strong>EN:</strong> Smoking, drinking, or using abusive language is strictly prohibited.<br/><strong>HI:</strong> धूम्रपान, मदिरापान या अभद्र भाषा का प्रयोग करना पूरी तरह वर्जित है।</div>
@@ -423,14 +447,14 @@ export default function LabourDashboardApp() {
       let currentMsgs = chatJob.messages;
       if (typeof currentMsgs === 'string') { try { currentMsgs = JSON.parse(currentMsgs); } catch(e){ currentMsgs=[]; } }
       if (!Array.isArray(currentMsgs)) currentMsgs = [];
-      
+
       currentMsgs.push({ sender: 'labour', text: `✅ Schedule: ${acceptDate} at ${acceptTime}. Final Rate: ₹${negotiatedPrice}`, timestamp: new Date().toISOString() });
 
       const { error } = await supabase.from('labour_bookings').update({ 
         status: 'Worker Assigned', assigned_to: workerProfile.phone, worker_id: workerProfile.id, 
         charge: Number(negotiatedPrice), total_amount: Number(negotiatedPrice), scheduled_date: acceptDate, messages: currentMsgs 
       }).eq('id', chatJob.id);
-      
+
       if(error) throw error;
       alert(t.alerts.jobAccept);
       setChatJob(null); setActiveTab('active_work'); handleRefresh();
@@ -451,10 +475,10 @@ export default function LabourDashboardApp() {
     try {
       const { netAmt } = getJobFinancials(job);
       const newBal = walletBalance + netAmt;
-      
+
       await supabase.from('labour_bookings').update({ status: 'Work Completed' }).eq('id', job.id);
       await supabase.from('labours').update({ balance: newBal }).eq('id', workerProfile.id);
-      
+
       await supabase.from('wallet_transactions').insert([{ 
         labour_id: workerProfile.id, 
         user_type: 'labour', 
@@ -463,7 +487,7 @@ export default function LabourDashboardApp() {
         status: 'completed', 
         reason: `Earning from Order #${job.id}` 
       }]);
-      
+
       alert(t.alerts.jobComp);
       setActiveTab('history'); handleRefresh();
     } catch (err: any) { alert("Error: " + err.message); }
@@ -478,11 +502,11 @@ export default function LabourDashboardApp() {
     try {
       const newBal = walletBalance - amt;
       await supabase.from('labours').update({ upi_id: withdrawUpi, balance: newBal }).eq('id', workerProfile.id);
-      
+
       await supabase.from('withdrawal_requests').insert([{ 
         labour_id: workerProfile.id, amount: amt, upi_id: withdrawUpi, status: 'pending' 
       }]);
-      
+
       await supabase.from('wallet_transactions').insert([{ 
         labour_id: workerProfile.id, user_type: 'labour', amount: amt, type: 'debit', status: 'pending', reason: `UPI Withdrawal Request` 
       }]);
@@ -560,7 +584,7 @@ export default function LabourDashboardApp() {
 
   return (
     <div style={{ maxWidth: '500px', margin: '0 auto', background: '#f8fafc', minHeight: '100vh', paddingBottom: '90px', fontFamily: '"Inter", sans-serif' }}>
-      
+
       {/* HEADER */}
       <div style={{ background: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 100 }}>
         <div>
@@ -590,7 +614,7 @@ export default function LabourDashboardApp() {
       )}
 
       <div style={{ padding: '15px' }}>
-        
+
         {/* TAB 1: NEW JOBS */}
         {activeTab === 'new_jobs' && (
           <div>
@@ -621,7 +645,7 @@ export default function LabourDashboardApp() {
                       <strong>{t.custName}</strong> {job.customer_name}<br/>
                       <strong>{t.loc}</strong> {fullAddress}
                     </div>
-                    
+
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
                       {custPhone && <button onClick={() => openSecureCall(custPhone)} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>📞 {t.callCust}</button>}
                       <button onClick={() => setMapJob(job)} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>{t.viewMap}</button>
@@ -659,12 +683,12 @@ export default function LabourDashboardApp() {
                 {isExpanded && (
                   <div style={{ marginTop: '15px', borderTop: '1px dashed #e2e8f0', paddingTop: '15px' }}>
                     <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', marginBottom: '12px', fontSize: '13px' }}><strong>{t.loc}</strong> {fullAddress}</div>
-                    
+
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
                       {custPhone && <button onClick={() => openSecureCall(custPhone)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>📞 {t.callCust}</button>}
                       <button onClick={() => setMapJob(job)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>{t.viewMap}</button>
                     </div>
-                    
+
                     {!isStarted ? (
                       <div style={{ background: '#fffbeb', padding: '15px', borderRadius: '12px', border: '1px solid #fde68a', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', fontWeight: '700', color: '#d97706', marginBottom: '8px' }}>{t.pinMsg}</div>
@@ -674,7 +698,7 @@ export default function LabourDashboardApp() {
                     ) : (
                       <div style={{ background: '#f0fdf4', padding: '15px', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
                         <div style={{ fontSize: '12px', fontWeight: '800', color: '#16a34a', marginBottom: '10px' }}>📸 {t.photoMsg}</div>
-                        
+
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
                           <div style={{ flex: 1, textAlign: 'center' }}>
                             <label style={{ display: 'block', padding: '10px 5px', background: job.work_in_pic ? '#dcfce7' : 'white', border: '1px dashed #cbd5e1', borderRadius: '8px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>
@@ -737,7 +761,7 @@ export default function LabourDashboardApp() {
                     <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#334155', marginBottom: '12px' }}>
                       <strong>{t.loc}</strong> {fullAddress}
                     </div>
-                    
+
                     <div style={{ display: 'flex', gap: '10px' }}>
                       {job.work_in_pic ? <a href={job.work_in_pic} target="_blank" rel="noopener noreferrer" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 Start Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No Start Pic</div>}
                       {job.work_out_pic ? <a href={job.work_out_pic} target="_blank" rel="noopener noreferrer" style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>📸 Mid Pic</a> : <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: '#f1f5f9', color: '#94a3b8', borderRadius: '6px', fontSize: '11px' }}>No Mid Pic</div>}
@@ -759,7 +783,7 @@ export default function LabourDashboardApp() {
               <div style={{ fontSize: '32px', fontWeight: '900', color: '#eab308' }}>₹{walletBalance}</div>
               <button onClick={() => setShowWithdrawModal(true)} style={{ background: '#eab308', color: '#000', padding: '14px', border: 'none', borderRadius: '10px', fontWeight: '900', marginTop: '12px', cursor: 'pointer', width: '100%' }}>{t.withdraw}</button>
             </div>
-            
+
             <div style={{ background: 'white', padding: '15px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 12px 0', fontSize: '14px' }}>{t.passbook}</h4>
               {walletTransactions.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '10px' }}>{t.noTx}</p> :
@@ -788,7 +812,7 @@ export default function LabourDashboardApp() {
         {activeTab === 'profile' && (
           <div>
             <h3 style={{ margin: '0 0 15px 0', color: '#1e293b', fontSize: '18px', fontWeight: '900' }}>{t.tab4}</h3>
-            
+
             <div style={{ background: 'white', padding: '20px', borderRadius: '16px', marginBottom: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '15px' }}>
                 {workerProfile.profile_pic && <img src={workerProfile.profile_pic} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 10px auto', border: '2px solid #e2e8f0' }} alt="Profile" />}

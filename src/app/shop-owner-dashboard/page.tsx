@@ -77,11 +77,10 @@ export default function ShopOwnerDashboard() {
       supabase.removeChannel(ordersSubscription); 
       supabase.removeChannel(chatSubscription);
     };
-  }, [currentShop]); // Depend on currentShop to avoid missed realtime updates
+  }, [currentShop?.id]); // 👈 FIX: currentShop.id par depend karein taki update hone par loop na ho
 
   const fetchAuthAndData = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
+    // ⚙️ Settings Fetch
     const { data: settingsData } = await supabase.from('app_settings').select('*').maybeSingle();
     if (settingsData) {
       if (settingsData.idCardUpi) setIdCardUpi(settingsData.idCardUpi);
@@ -89,20 +88,47 @@ export default function ShopOwnerDashboard() {
       if (settingsData.registrationUpi) setRegistrationUpi(settingsData.registrationUpi); 
     }
 
+    // 🚀 STEP 1: Pehle LocalStorage Check Karo (OTP Login walon ke liye)
+    let phoneNo = '';
+    const savedShopData = localStorage.getItem('fixifiy_shop');
+    if (savedShopData) {
+       try {
+           phoneNo = JSON.parse(savedShopData).phone;
+       } catch(e) {}
+    }
+
+    // 🚀 STEP 2: Agar LocalStorage mein phone nahi mila, tab Supabase Session (Password Login) check karo
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!phoneNo && session?.user) {
+        let sessionPhone = session.user.email?.replace('@fixifiy.in', '').replace(/[^0-9]/g, '');
+        if (sessionPhone && sessionPhone.startsWith('91') && sessionPhone.length === 12) {
+            sessionPhone = sessionPhone.substring(2);
+        }
+        phoneNo = sessionPhone || '';
+    }
+
     let shopData = null;
-    if (session?.user) {
-      let phoneNo = session.user.email?.replace('@fixifiy.in', '').replace(/[^0-9]/g, '');
-      if (phoneNo && phoneNo.startsWith('91') && phoneNo.length === 12) phoneNo = phoneNo.substring(2);
-      
-      const { data } = await supabase.from('shops').select('*').eq('phone', phoneNo).maybeSingle();
-      shopData = data || { phone: phoneNo, name: '' };
-      setCurrentShop(shopData);
+
+    // 🚀 STEP 3: Phone number mil gaya, toh Database se latest details nikal lo
+    if (phoneNo) {
+        const { data } = await supabase.from('shops').select('*').eq('phone', phoneNo).maybeSingle();
+        if (data) {
+            shopData = data;
+            setCurrentShop(data);
+            localStorage.setItem('fixifiy_shop', JSON.stringify(data)); // Sync kar do local storage bhi
+        }
+    } else {
+        // Agar phone no kahin se nahi mila, toh wapas login par bhej do
+        router.push('/login?role=shop owner');
+        return;
     }
     
     fetchProducts(); 
-    fetchOrders(shopData?.id); 
+    if(shopData?.id) {
+       fetchOrders(shopData.id); 
+       fetchChatHistory(shopData.id); 
+    }
     fetchNotices(); 
-    if(shopData?.id) fetchChatHistory(shopData.id); 
   };
 
   const fetchNotices = async () => {
@@ -158,7 +184,13 @@ export default function ShopOwnerDashboard() {
     }
   };
 
-  const handleLogout = async () => { if (window.confirm("Logout karein?")) { await supabase.auth.signOut(); router.push('/login'); } };
+  const handleLogout = async () => { 
+      if (window.confirm("Logout karein?")) { 
+          localStorage.removeItem('fixifiy_shop'); // Local data clear
+          await supabase.auth.signOut(); // Session clear
+          router.push('/login?role=shop owner'); 
+      } 
+  };
 
   const handleConfirmPrimePayment = async () => {
     alert("✅ Welcome to Fixifiy Prime! Payment of ₹999 recorded.");

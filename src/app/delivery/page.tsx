@@ -172,14 +172,20 @@ export default function DeliveryBoyApp() {
     } catch (e) { console.log("Settings Error:", e); }
   };
 
-  const fetchMyWalletAndOrders = async (boyId: string) => {
+  // 🔥 UPDATED: Phone se fetch karne ka logic 🔥
+  const fetchMyWalletAndOrders = async (passedBoyId: any, bPhone: string) => {
     try {
-      const { data: boyData } = await supabase.from('delivery_boys').select('*').eq('id', boyId).maybeSingle();
+      const { data: boyData } = await supabase.from('delivery_boys').select('*').eq('phone', bPhone.trim()).maybeSingle();
       if (!boyData) {
         localStorage.removeItem('fixifiy_delivery_boy');
         setDeliveryBoy(null);
         return;
       }
+      
+      // Sync latest data to localStorage
+      localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(boyData));
+
+      const validBoyId = boyData.id;
       setDeliveryBoy(boyData);
       setWalletBalance(Number(boyData.balance) || 0);
       if (boyData.upi_id) setWithdrawUpi(boyData.upi_id);
@@ -189,44 +195,61 @@ export default function DeliveryBoyApp() {
       if (typeof msgs === 'string') { try { msgs = JSON.parse(msgs); } catch(e) { msgs = []; } }
       setChatMessages(Array.isArray(msgs) ? msgs : []);
 
-    } catch (e) { console.warn("Boy Fetch Error", e); }
+      try {
+        const { data: txData } = await supabase.from('wallet_transactions').select('*').eq('delivery_boy_id', validBoyId).order('created_at', { ascending: false });
+        if (txData) setWalletTransactions(txData);
+      } catch (e) {}
 
-    try {
-      const { data: txData } = await supabase.from('wallet_transactions').select('*').eq('delivery_boy_id', boyId).order('created_at', { ascending: false });
-      if (txData) setWalletTransactions(txData);
-    } catch (e) { console.warn("Transactions Fetch Error", e); }
+      try {
+        const { data: wdData } = await supabase.from('withdrawal_requests').select('*').eq('delivery_boy_id', validBoyId).order('created_at', { ascending: false });
+        if (wdData) setWithdrawalRequests(wdData);
+      } catch (e) {}
 
-    try {
-      const { data: wdData } = await supabase.from('withdrawal_requests').select('*').eq('delivery_boy_id', boyId).order('created_at', { ascending: false });
-      if (wdData) setWithdrawalRequests(wdData);
-    } catch (e) { console.warn("Withdrawals Fetch Error", e); }
-
-    try {
-      const { data: orders } = await supabase.from('orders').select('*').eq('delivery_boy_id', boyId).order('id', { ascending: false });
-      if (orders) {
-        setAssignedOrders(orders);
-        const shopIds = Array.from(new Set(orders.map(o => o.shop_id || o.seller_id || o.store_id).filter(Boolean)));
-        if (shopIds.length > 0) {
-          const { data: shops } = await supabase.from('shops').select('*').in('id', shopIds);
-          if (shops) {
-            const shopMap: { [key: string]: any } = {};
-            shops.forEach(s => { shopMap[s.id] = s; });
-            setShopsData(shopMap);
+      try {
+        const { data: orders } = await supabase.from('orders').select('*').eq('delivery_boy_id', validBoyId).order('id', { ascending: false });
+        if (orders) {
+          setAssignedOrders(orders);
+          const shopIds = Array.from(new Set(orders.map(o => o.shop_id || o.seller_id || o.store_id).filter(Boolean)));
+          if (shopIds.length > 0) {
+            const { data: shops } = await supabase.from('shops').select('*').in('id', shopIds);
+            if (shops) {
+              const shopMap: { [key: string]: any } = {};
+              shops.forEach(s => { shopMap[s.id] = s; });
+              setShopsData(shopMap);
+            }
           }
         }
-      }
-    } catch (e) { console.warn("Orders Fetch Error", e); }
+      } catch (e) {}
+
+    } catch (e) { console.warn("Boy Fetch Error", e); }
   };
 
+  // 🔥 UPDATED: OTP + Password Dono ka check 🔥
   useEffect(() => {
     const checkSession = async () => {
-      const storedSession = localStorage.getItem('fixifiy_delivery_boy');
+      // 🚀 STEP 1: Pehle LocalStorage Check Karo (OTP Login)
+      let phoneNo = '';
+      const storedSession = typeof window !== 'undefined' ? localStorage.getItem('fixifiy_delivery_boy') : null;
       if (storedSession) {
-        try {
-          const parsedBoy = JSON.parse(storedSession);
-          await fetchMyWalletAndOrders(String(parsedBoy.id));
+        try { phoneNo = JSON.parse(storedSession).phone; } catch(e) {}
+      }
+
+      // 🚀 STEP 2: Supabase Session (Password Login) check karo
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!phoneNo && session?.user) {
+          let sessionPhone = session.user.email?.replace('@fixifiy.in', '').replace(/[^0-9]/g, '');
+          if (sessionPhone && sessionPhone.startsWith('91') && sessionPhone.length === 12) {
+              sessionPhone = sessionPhone.substring(2);
+          }
+          phoneNo = sessionPhone || '';
+      }
+
+      // 🚀 STEP 3: Agar phone mil gaya toh fetch karo
+      if (phoneNo) {
+          await fetchMyWalletAndOrders(null, phoneNo);
           fetchLiveGPS();
-        } catch(e) { localStorage.removeItem('fixifiy_delivery_boy'); }
+      } else {
+          setDeliveryBoy(null);
       }
       setIsCheckingAuth(false);
       fetchAdminSettings();
@@ -244,7 +267,7 @@ export default function DeliveryBoyApp() {
     
     localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(data));
     setDeliveryBoy(data);
-    fetchMyWalletAndOrders(String(data.id));
+    fetchMyWalletAndOrders(null, data.phone);
   };
 
   const handleLogout = () => {
@@ -256,7 +279,7 @@ export default function DeliveryBoyApp() {
   const handleRefresh = async () => {
     setIsRefreshing(true); 
     fetchLiveGPS();
-    if (deliveryBoy?.id) await fetchMyWalletAndOrders(String(deliveryBoy.id));
+    if (deliveryBoy?.phone) await fetchMyWalletAndOrders(null, deliveryBoy.phone);
     fetchAdminSettings();
     setTimeout(() => setIsRefreshing(false), 800);
   };

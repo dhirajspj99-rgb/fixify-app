@@ -172,9 +172,21 @@ function MainCustomerScreen() {
         setFeaturedMistris(premiumLabours.length > 0 ? premiumLabours : [{ id: 1, name: 'Raju Rajmistri', labour_type: 'Rajmistri (Mason)', base_rate: 750, rating: 4.8, exp: '8 Yrs Exp', phone: '000' }]);
       }
 
+      // 🔥 YAHAN MAIN PROBLEM THI: LOCALSTORAGE SE DATA UTHAYA GAYA HAI 🔥
+      let phoneNo = '';
+      const savedLocalCustomer = localStorage.getItem('fixifiy_customer');
+      if (savedLocalCustomer) {
+         try {
+             phoneNo = JSON.parse(savedLocalCustomer).phone;
+         } catch(e) {}
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        let phoneNo = session.user.email?.replace('@fixifiy.com', '').replace('@fixifiy.in', '') || ''; 
+      if (!phoneNo && session) {
+        phoneNo = session.user.email?.replace('@fixifiy.com', '').replace('@fixifiy.in', '') || ''; 
+      }
+
+      if (phoneNo) {
         const { data: custData } = await supabase.from('customers').select('*').eq('phone', phoneNo);
         if (custData && custData.length > 0) {
           setAuthUser(custData[0]); 
@@ -195,6 +207,7 @@ function MainCustomerScreen() {
              balance: custData[0].balance || 0 
           });
           setCheckoutAddress(custData[0].address || '');
+          localStorage.setItem('fixifiy_customer', JSON.stringify(custData[0])); // Hamesha local storage sync rakho
         }
         await fetchPastOrders(phoneNo);
       }

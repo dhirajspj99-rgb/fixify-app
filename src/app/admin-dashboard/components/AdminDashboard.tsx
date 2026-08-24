@@ -29,6 +29,9 @@ const TABS_CONFIG = [
   { id: 'settings', label: 'SETTINGS & GST', icon: '⚙️' }
 ];
 
+// 🔥 SUBADMIN KO SIRF YEH TABS DIKHENGE 🔥
+const SUBADMIN_ALLOWED_TABS = ['dashboard', 'orders', 'customers', 'feedback', 'chats'];
+
 const indiaLocationData = {
   "Bihar": { "Patna": ["Patna Sadar", "Danapur", "Barh", "Masaurhi"], "Begusarai": ["Begusarai Sadar", "Barauni"] },
   "Uttar Pradesh": { "Lucknow": ["Gomti Nagar", "Alambagh"] },
@@ -41,9 +44,13 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
   
-  // 🔥 GLOBAL STATE FILTER
+  // 🔥 ROLE BASED AUTH STATE 🔥
+  const [adminRole, setAdminRole] = useState<'master' | 'subadmin' | null>(null);
+  const [loggedInUser, setLoggedInUser] = useState<any>(null);
+
+  // GLOBAL STATE FILTER
   const [globalStateFilter, setGlobalStateFilter] = useState('All');
-  const [incomeFilter, setIncomeFilter] = useState('month'); // 🔥 New Admin Income Filter
+  const [incomeFilter, setIncomeFilter] = useState('month'); 
   
   const [labours, setLabours] = useState<any[]>([]);
   const [shops, setShops] = useState<any[]>([]);
@@ -70,11 +77,40 @@ export default function AdminDashboard() {
   const [chatMsgInput, setChatMsgInput] = useState(''); 
 
   useEffect(() => { 
-    fetchData(); 
+    checkAuthAndFetch(); 
   }, []);
 
-  const fetchData = async () => {
+  const checkAuthAndFetch = async () => {
     setIsLoading(true);
+    // 🚀 STEP 1: Check LocalStorage for Subadmin (OTP Login)
+    const storedSubadmin = typeof window !== 'undefined' ? localStorage.getItem('fixifiy_subadmin') : null;
+    let isSubadmin = false;
+    
+    if (storedSubadmin) {
+      try {
+        const parsed = JSON.parse(storedSubadmin);
+        setAdminRole('subadmin');
+        setLoggedInUser(parsed);
+        isSubadmin = true;
+      } catch(e) {}
+    }
+
+    // 🚀 STEP 2: Check Supabase Session for Master Admin
+    if (!isSubadmin) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setAdminRole('master');
+        setLoggedInUser({ email: session.user.email, name: 'Master Admin' });
+      } else {
+        window.location.href = '/login?role=admin';
+        return;
+      }
+    }
+
+    await fetchData();
+  };
+
+  const fetchData = async () => {
     try {
       const safeFetch = async (tableName: string, query: any) => {
         const { data, error } = await query;
@@ -132,8 +168,12 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     if (window.confirm("Kya aap sach mein logout karna chahte hain?")) {
-      await supabase.auth.signOut();
-      window.location.href = '/login'; 
+      if (adminRole === 'subadmin') {
+        localStorage.removeItem('fixifiy_subadmin');
+      } else {
+        await supabase.auth.signOut();
+      }
+      window.location.href = '/login?role=admin'; 
     }
   };
 
@@ -153,6 +193,7 @@ export default function AdminDashboard() {
   };
 
   const handleProfileWalletAction = async (type: string) => {
+    if (adminRole !== 'master') return alert("Access Denied! Sirf Master Admin yeh kar sakta hai.");
     if (!walletAmtInput || Number(walletAmtInput) <= 0) return alert("Sahi amount daalein!");
     if (!walletReasonInput) return alert("Reason likhna zaroori hai!");
     if (!selectedUser) return;
@@ -176,6 +217,7 @@ export default function AdminDashboard() {
   };
 
   const handleProcessTransaction = async (txn: any, action: 'approve' | 'reject') => {
+    if (adminRole !== 'master') return alert("Access Denied!");
     if (!selectedUser) return;
 
     if (action === 'approve') {
@@ -241,7 +283,7 @@ export default function AdminDashboard() {
       const { error } = await supabase.from('support_chats').insert({
         customer_id: selectedUser.id,
         message: chatMsgInput,
-        sender: 'admin'
+        sender: adminRole === 'master' ? 'admin' : 'subadmin'
       });
       if (error) throw error;
       alert("✅ Message/Notification sent successfully!");
@@ -249,6 +291,11 @@ export default function AdminDashboard() {
       fetchData(); 
     } catch (e: any) { alert("Error sending message: " + e.message); }
   };
+
+  // 🔥 TABS VISIBILITY FILTER 🔥
+  const visibleTabs = adminRole === 'master' 
+    ? TABS_CONFIG 
+    : TABS_CONFIG.filter(tab => SUBADMIN_ALLOWED_TABS.includes(tab.id));
 
   // 🔥 CORE CALCULATIONS & FILTERS 🔥
   const filteredCustomers = globalStateFilter === 'All' ? customers : customers.filter(c => c.state === globalStateFilter);
@@ -272,13 +319,13 @@ export default function AdminDashboard() {
   const pendingOrderRefundsCount = filteredOrders.filter((o:any) => o.refund_status?.includes('Pending Admin Refund')).length;
   const totalPendingAction = pendingTopupsCount + pendingWithdrawalsCount + pendingWalletRefundsCount + pendingOrderRefundsCount;
 
-  // Wallet Liabilities (Total Money in system)
+  // Wallet Liabilities
   const totalCustomerWallet = filteredCustomers.reduce((sum, c) => sum + (Number(c.balance) || 0), 0);
   const totalShopWallet = filteredShops.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
   const totalLabourWallet = filteredLabours.reduce((sum, l) => sum + (Number(l.balance) || 0), 0);
   const totalDeliveryWallet = filteredDeliveryBoys.reduce((sum, d) => sum + (Number(d.balance) || 0), 0);
 
-  // Admin Income Calculation (Based on Date Filter)
+  // Admin Income Calculation
   const completedOrders = filteredOrders.filter(o => ['completed', 'delivered', 'refunded'].includes((o.status || '').toLowerCase()));
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -299,7 +346,7 @@ export default function AdminDashboard() {
 
       if (include) {
          const amt = Number(o.total_amount) || 0;
-         adminIncome += (amt * (commissionRate / 100)); // Applying Commission %
+         adminIncome += (amt * (commissionRate / 100));
       }
   });
 
@@ -317,19 +364,25 @@ export default function AdminDashboard() {
   return (
     <div style={{ background: '#020617', minHeight: '100vh', padding: '24px', color: '#f8fafc', fontFamily: 'Inter, system-ui, sans-serif' }}>
       
-      {/* Top Header - WITH GLOBAL FILTER */}
+      {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', background: '#0f172a', padding: '20px 30px', borderRadius: '16px', border: '1px solid #1e293b', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{ background: 'linear-gradient(135deg, #38bdf8, #3b82f6)', padding: '12px', borderRadius: '12px', fontSize: '24px' }}>🚀</div>
+          <div style={{ background: adminRole === 'master' ? 'linear-gradient(135deg, #38bdf8, #3b82f6)' : 'linear-gradient(135deg, #f59e0b, #d97706)', padding: '12px', borderRadius: '12px', fontSize: '24px' }}>
+            {adminRole === 'master' ? '🚀' : '🛡️'}
+          </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Fixifiy Master Admin OS</h1>
-            <p style={{ color: '#94a3b8', margin: '4px 0 0 0', fontSize: '13px', fontWeight: '500' }}>Unified Management Dashboard 2026</p>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              {adminRole === 'master' ? 'Fixifiy Master Admin OS' : 'Fixifiy Subadmin Panel'}
+            </h1>
+            <p style={{ color: '#94a3b8', margin: '4px 0 0 0', fontSize: '13px', fontWeight: '500' }}>
+              Logged in as: {loggedInUser?.name || (adminRole === 'master' ? 'Master Admin' : 'Subadmin')}
+            </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', background: '#1e293b', padding: '5px 15px', borderRadius: '10px', border: '1px solid #334155' }}>
-                <span style={{ marginRight: '10px', color: '#94a3b8', fontSize: '13px' }}>🌍 Location Filter:</span>
+                <span style={{ marginRight: '10px', color: '#94a3b8', fontSize: '13px' }}>🌍 Zone:</span>
                 <select value={globalStateFilter} onChange={(e) => setGlobalStateFilter(e.target.value)} style={{ background: 'transparent', color: '#38bdf8', border: 'none', outline: 'none', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
                     <option value="All" style={{ background: '#0f172a', color: 'white' }}>All States / Global</option>
                     {allAvailableStates.map((stateName: any) => (
@@ -346,7 +399,8 @@ export default function AdminDashboard() {
         {/* Navigation Sidebar */}
         <div style={{ background: '#0f172a', padding: '20px 15px', borderRadius: '20px', border: '1px solid #1e293b', height: 'fit-content', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
           <h4 style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '15px', paddingLeft: '15px' }}>Main Menu</h4>
-          {TABS_CONFIG.map(tab => (
+          
+          {visibleTabs.map(tab => (
             <button 
               key={tab.id} 
               onClick={() => { setActiveTab(tab.id); setSelectedUser(null); }}
@@ -389,7 +443,8 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {pendingCustomerRequests.length > 0 && (
+              {/* ONLY MASTER ADMIN CAN APPROVE WALLET TRANSACTIONS */}
+              {adminRole === 'master' && pendingCustomerRequests.length > 0 && (
                 <div style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '20px', borderRadius: '16px', marginBottom: '25px' }}>
                   <h3 style={{ margin: '0 0 15px 0', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>⏳</span> Action Required: Pending Wallet Requests
@@ -423,18 +478,22 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-                <div style={{ background: '#1e293b', padding: '25px', borderRadius: '16px' }}>
-                  <h4 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#38bdf8' }}>🛠️ Manual Wallet Adjustment</h4>
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                    <input type="number" placeholder="Amount (₹)" value={walletAmtInput} onChange={e=>setWalletAmtInput(e.target.value)} style={{ flex: 1, padding: '12px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '10px', outline: 'none' }} />
-                    <input type="text" placeholder="Reason / Note" value={walletReasonInput} onChange={e=>setWalletReasonInput(e.target.value)} style={{ flex: 2, padding: '12px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '10px', outline: 'none' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: adminRole === 'master' ? '1fr 1fr' : '1fr', gap: '20px', marginBottom: '30px' }}>
+                
+                {/* ONLY MASTER ADMIN CAN MANUALLY ADJUST WALLET */}
+                {adminRole === 'master' && (
+                  <div style={{ background: '#1e293b', padding: '25px', borderRadius: '16px' }}>
+                    <h4 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#38bdf8' }}>🛠️ Manual Wallet Adjustment</h4>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                      <input type="number" placeholder="Amount (₹)" value={walletAmtInput} onChange={e=>setWalletAmtInput(e.target.value)} style={{ flex: 1, padding: '12px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '10px', outline: 'none' }} />
+                      <input type="text" placeholder="Reason / Note" value={walletReasonInput} onChange={e=>setWalletReasonInput(e.target.value)} style={{ flex: 2, padding: '12px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '10px', outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                      <button onClick={() => handleProfileWalletAction('credit')} style={{ flex: 1, padding: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Add Bonus/Refund</button>
+                      <button onClick={() => handleProfileWalletAction('debit')} style={{ flex: 1, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>➖ Deduct Money</button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '15px' }}>
-                    <button onClick={() => handleProfileWalletAction('credit')} style={{ flex: 1, padding: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Add Bonus/Refund</button>
-                    <button onClick={() => handleProfileWalletAction('debit')} style={{ flex: 1, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>➖ Deduct Money</button>
-                  </div>
-                </div>
+                )}
 
                 <div style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '25px', borderRadius: '16px' }}>
                   <h4 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#a78bfa', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -533,53 +592,57 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Admin Income Tracker */}
-                  <div style={{ background: 'linear-gradient(145deg, #1e293b, #0f172a)', padding: '30px', borderRadius: '16px', border: '1px solid #10b981', marginBottom: '30px', position: 'relative', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-                      <div>
-                        <h3 style={{ margin: 0, color: '#10b981', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          💰 Admin Income (Commission)
-                        </h3>
-                        <p style={{ margin: '5px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>Calculated at {commissionRate}% of completed orders.</p>
+                  {/* 🔥 ONLY MASTER ADMIN SEES REVENUE AND LIABILITIES 🔥 */}
+                  {adminRole === 'master' && (
+                    <>
+                      {/* Admin Income Tracker */}
+                      <div style={{ background: 'linear-gradient(145deg, #1e293b, #0f172a)', padding: '30px', borderRadius: '16px', border: '1px solid #10b981', marginBottom: '30px', position: 'relative', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+                          <div>
+                            <h3 style={{ margin: 0, color: '#10b981', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              💰 Admin Income (Commission)
+                            </h3>
+                            <p style={{ margin: '5px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>Calculated at {commissionRate}% of completed orders.</p>
+                          </div>
+                          
+                          <select 
+                            value={incomeFilter} 
+                            onChange={(e) => setIncomeFilter(e.target.value)} 
+                            style={{ background: '#0f172a', color: 'white', border: '1px solid #10b981', padding: '10px 15px', borderRadius: '8px', outline: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                          >
+                            <option value="today">Today</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="all">All Time</option>
+                          </select>
+                        </div>
+                        <p style={{ fontSize: '48px', color: '#10b981', margin: '20px 0 0 0', fontWeight: '900' }}>
+                          ₹{adminIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </p>
                       </div>
-                      
-                      <select 
-                        value={incomeFilter} 
-                        onChange={(e) => setIncomeFilter(e.target.value)} 
-                        style={{ background: '#0f172a', color: 'white', border: '1px solid #10b981', padding: '10px 15px', borderRadius: '8px', outline: 'none', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        <option value="today">Today</option>
-                        <option value="month">This Month</option>
-                        <option value="year">This Year</option>
-                        <option value="all">All Time</option>
-                      </select>
-                    </div>
-                    <p style={{ fontSize: '48px', color: '#10b981', margin: '20px 0 0 0', fontWeight: '900' }}>
-                      ₹{adminIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                    </p>
-                  </div>
 
-                  {/* Live Wallet Liabilities */}
-                  <h3 style={{ color: '#f8fafc', fontSize: '20px', marginBottom: '20px' }}>🏦 System Liability (Total Wallet Balances)</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-                    <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #38bdf8' }}>
-                       <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>👤 Customers Wallet</p>
-                       <p style={{ margin: 0, color: '#38bdf8', fontSize: '24px', fontWeight: 'bold' }}>₹{totalCustomerWallet.toLocaleString()}</p>
-                    </div>
-                    <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #f59e0b' }}>
-                       <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>🏪 Shops Wallet</p>
-                       <p style={{ margin: 0, color: '#f59e0b', fontSize: '24px', fontWeight: 'bold' }}>₹{totalShopWallet.toLocaleString()}</p>
-                    </div>
-                    <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #a855f7' }}>
-                       <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>👷 Labours Wallet</p>
-                       <p style={{ margin: 0, color: '#a855f7', fontSize: '24px', fontWeight: 'bold' }}>₹{totalLabourWallet.toLocaleString()}</p>
-                    </div>
-                    <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #ec4899' }}>
-                       <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>🚚 Delivery Boys Wallet</p>
-                       <p style={{ margin: 0, color: '#ec4899', fontSize: '24px', fontWeight: 'bold' }}>₹{totalDeliveryWallet.toLocaleString()}</p>
-                    </div>
-                  </div>
-
+                      {/* Live Wallet Liabilities */}
+                      <h3 style={{ color: '#f8fafc', fontSize: '20px', marginBottom: '20px' }}>🏦 System Liability (Total Wallet Balances)</h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+                        <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #38bdf8' }}>
+                           <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>👤 Customers Wallet</p>
+                           <p style={{ margin: 0, color: '#38bdf8', fontSize: '24px', fontWeight: 'bold' }}>₹{totalCustomerWallet.toLocaleString()}</p>
+                        </div>
+                        <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #f59e0b' }}>
+                           <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>🏪 Shops Wallet</p>
+                           <p style={{ margin: 0, color: '#f59e0b', fontSize: '24px', fontWeight: 'bold' }}>₹{totalShopWallet.toLocaleString()}</p>
+                        </div>
+                        <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #a855f7' }}>
+                           <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>👷 Labours Wallet</p>
+                           <p style={{ margin: 0, color: '#a855f7', fontSize: '24px', fontWeight: 'bold' }}>₹{totalLabourWallet.toLocaleString()}</p>
+                        </div>
+                        <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', borderLeft: '4px solid #ec4899' }}>
+                           <p style={{ margin: '0 0 5px 0', color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase' }}>🚚 Delivery Boys Wallet</p>
+                           <p style={{ margin: 0, color: '#ec4899', fontSize: '24px', fontWeight: 'bold' }}>₹{totalDeliveryWallet.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

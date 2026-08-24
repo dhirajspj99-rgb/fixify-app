@@ -56,6 +56,9 @@ function LoginContent() {
   const [isLogin, setIsLogin] = useState(true);
   const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
   
+  // 🔥 ADMIN LOGIN TYPE TOGGLE
+  const [adminLoginType, setAdminLoginType] = useState<'master' | 'subadmin'>('master');
+  
   const [forgotStep, setForgotStep] = useState<0 | 1 | 2 | 3>(0);
   
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -87,7 +90,25 @@ function LoginContent() {
   
   const isAdmin = role === 'admin';
 
+  // 🔥 ALPHANUMERIC CAPTCHA LOGIC (ONLY FOR ADMIN/SUBADMIN) 🔥
+  const [captchaText, setCaptchaText] = useState('');
+  const [userCaptcha, setUserCaptcha] = useState('');
+
+  const generateCaptchaString = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCaptchaText(result);
+    setUserCaptcha('');
+  };
+
   useEffect(() => {
+    if (isAdmin) {
+      generateCaptchaString(); // Captcha load tabhi hoga jab role admin ho
+    }
+
     if (window.recaptchaVerifier) {
        window.recaptchaVerifier.clear();
        window.recaptchaVerifier = undefined;
@@ -102,7 +123,7 @@ function LoginContent() {
     } catch (err) {
       console.log("Recaptcha Init Error: ", err);
     }
-  }, []);
+  }, [isAdmin]);
 
   const handleLabourSkillChange = (skill: string) => {
     setLabourTypes((prev) => prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]);
@@ -172,6 +193,7 @@ function LoginContent() {
     finally { setLoading(false); }
   };
 
+  // 🔥 SEND OTP FUNCTION (Customer, Shop, Labour + Subadmin)
   const handleTriggerAuth = async () => {
     if (!isLogin && !isAdmin) {
       const finalState = stateName === 'Other' ? customState.trim() : stateName;
@@ -195,13 +217,25 @@ function LoginContent() {
       }
     } 
     
-    if (isLogin && loginMethod === 'otp') {
+    if (isLogin && loginMethod === 'otp' && !isAdmin) {
       if (!loginId || !/^\d{10}$/.test(loginId.trim())) {
         alert(t("Enter valid 10-digit number for login!", "लॉगिन के लिए सही 10-अंकीय मोबाइल नंबर डालें!")); return;
       }
     }
 
-    if (isAdmin) { handleAdminLogin(); return; }
+    // 🛡️ SECURITY CHECK: SUBADMIN CAPTCHA VALIDATION
+    if (isAdmin && adminLoginType === 'subadmin') {
+      if (userCaptcha !== captchaText) {
+        alert(t("❌ CAPTCHA is incorrect! Please try again.", "❌ कैप्चा गलत है! कृपया दोबारा प्रयास करें।"));
+        generateCaptchaString();
+        return;
+      }
+    }
+
+    if (isAdmin && adminLoginType === 'master') { 
+      handleAdminLogin(); 
+      return; 
+    }
 
     setLoading(true);
     let targetPhone = !isLogin ? phoneNumber : loginId;
@@ -212,16 +246,17 @@ function LoginContent() {
     if (role.toLowerCase().includes('shop')) checkTable = 'shops';
     else if (role.toLowerCase().includes('labour')) checkTable = 'labours';
     else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
+    else if (isAdmin && adminLoginType === 'subadmin') checkTable = 'sub_admins'; 
 
     try {
       const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone);
       
-      if (isLogin) {
+      if (isLogin || isAdmin) {
         if (error || !data || data.length === 0) {
           setLoading(false);
           alert(t(
-            `⚠️ Mobile number not found in ${role} database. Please Sign Up first.`, 
-            `⚠️ यह नंबर ${role} के रूप में रजिस्टर नहीं है। कृपया पहले नया अकाउंट बनाएं।`
+            `⚠️ Mobile number not found. Please Sign Up first.`, 
+            `⚠️ यह नंबर रजिस्टर नहीं है।`
           ));
           return; 
         }
@@ -253,14 +288,14 @@ function LoginContent() {
     }
   };
 
-  // 🔥 OTP VERIFICATION & DASHBOARD DATA FETCHING (FIXED)
+  // 🔥 OTP VERIFICATION 🔥
   const handleVerifyOtpAndProcess = async () => {
     if (otp.length !== 6) { alert(t("Enter valid 6-digit OTP!", "कृपया सही 6-अंकीय OTP डालें!")); return; }
     setLoading(true);
     try {
       await confirmationResult.confirm(otp);
 
-      if (!isLogin) {
+      if (!isLogin && !isAdmin) {
         const finalState = stateName === 'Other' ? customState.trim() : stateName;
         const finalDistrict = district === 'Other' ? customDistrict.trim() : district;
         const finalBlock = block === 'Other' ? customBlock.trim() : block;
@@ -297,15 +332,22 @@ function LoginContent() {
         let userFound = false;
         let targetUrl = '/'; 
 
-        if (role === 'customer') {
-          const { data, error } = await supabase.from('customers').select('*').eq('phone', checkPhone).maybeSingle();
+        if (isAdmin && adminLoginType === 'subadmin') {
+          const { data: dbData } = await supabase.from('sub_admins').select('*').eq('phone', checkPhone).maybeSingle();
+          if (dbData) {
+            userFound = true;
+            localStorage.setItem('fixifiy_subadmin', JSON.stringify(dbData));
+            targetUrl = '/admin-dashboard'; 
+          }
+        } else if (role === 'customer') {
+          const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).maybeSingle();
           if (data) {
             userFound = true;
             localStorage.setItem('fixifiy_customer', JSON.stringify(data));
             targetUrl = '/customer-dashboard'; 
           }
         } else if (role.toLowerCase().includes('shop')) {
-          const { data: dbData, error } = await supabase.from('shops').select('*').eq('phone', checkPhone).maybeSingle();
+          const { data: dbData } = await supabase.from('shops').select('*').eq('phone', checkPhone).maybeSingle();
           if (dbData) {
             if (dbData.status === 'Pending') { await supabase.auth.signOut(); alert(t("⏳ Account is Pending.", "⏳ आपका अकाउंट अभी पेंडिंग है।")); setLoading(false); return; }
             if (dbData.status === 'Suspended') { await supabase.auth.signOut(); alert(t("🚫 Account is Suspended.", "🚫 आपका अकाउंट सस्पेंड है।")); setLoading(false); return; }
@@ -315,7 +357,7 @@ function LoginContent() {
             targetUrl = '/shop-owner-dashboard'; 
           }
         } else if (role.toLowerCase().includes('labour')) {
-          const { data: dbData, error } = await supabase.from('labours').select('*').eq('phone', checkPhone).maybeSingle();
+          const { data: dbData } = await supabase.from('labours').select('*').eq('phone', checkPhone).maybeSingle();
           if (dbData) {
             if (dbData.status === 'Pending') { await supabase.auth.signOut(); alert(t("⏳ Account is Pending.", "⏳ आपका अकाउंट अभी पेंडिंग है।")); setLoading(false); return; }
             if (dbData.status === 'Suspended') { await supabase.auth.signOut(); alert(t("🚫 Account is Suspended.", "🚫 आपका अकाउंट सस्पेंड है।")); setLoading(false); return; }
@@ -325,7 +367,7 @@ function LoginContent() {
             targetUrl = '/labour-dashboard'; 
           }
         } else if (role.toLowerCase().includes('delivery')) {
-          const { data: dbData, error } = await supabase.from('delivery_boys').select('*').eq('phone', checkPhone).maybeSingle();
+          const { data: dbData } = await supabase.from('delivery_boys').select('*').eq('phone', checkPhone).maybeSingle();
           if (dbData) {
             userFound = true;
             localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
@@ -335,7 +377,7 @@ function LoginContent() {
 
         if (!userFound) { 
           await supabase.auth.signOut();
-          alert(t("⚠️ Mobile number not found in this role's database. Please Sign Up.", "⚠️ यह नंबर इस रोल के डेटाबेस में नहीं मिला। कृपया सही रोल चुनें।")); 
+          alert(t("⚠️ Mobile number not found. Please Sign Up.", "⚠️ यह नंबर रजिस्टर नहीं है।")); 
           setLoading(false); return; 
         }
 
@@ -433,7 +475,7 @@ function LoginContent() {
 
     if (!userFound) {
       await supabase.auth.signOut();
-      alert(t("⚠️ Mobile number not found in this role's database. Please Sign Up.", "⚠️ यह नंबर इस रोल के डेटाबेस में नहीं मिला। कृपया सही रोल चुनें।"));
+      alert(t("⚠️ Mobile number not found. Please Sign Up.", "⚠️ यह नंबर रजिस्टर नहीं है।"));
       setLoading(false); return;
     }
 
@@ -441,9 +483,17 @@ function LoginContent() {
     router.push(targetUrl); 
   };
 
+  // 🔥 MASTER ADMIN LOGIN WITH CAPTCHA 🔥
   const handleAdminLogin = async () => {
     if (!loginId || !loginPassword) { alert(t("Enter Admin ID & Password!", "एडमिन आईडी और पासवर्ड भरें!")); return; }
     
+    // 🛡️ SECURITY CHECK: MASTER ADMIN CAPTCHA
+    if (userCaptcha !== captchaText) {
+      alert("❌ Security CAPTCHA is incorrect! Please try again.");
+      generateCaptchaString(); // Regenerate on fail
+      return;
+    }
+
     let finalEmail = loginId.trim();
     if (!finalEmail.includes('@')) {
       finalEmail = `${finalEmail}@fixifiy.in`;
@@ -471,6 +521,7 @@ function LoginContent() {
         localStorage.setItem(attemptKey, JSON.stringify(attemptData));
         alert(t(`❌ Wrong Password! ${3 - attemptData.count} attempts left.`, `❌ गलत पासवर्ड! ${3 - attemptData.count} मौके बचे हैं।`));
       }
+      generateCaptchaString(); // Regenerate on fail
       setLoading(false); return; 
     }
 
@@ -504,6 +555,27 @@ function LoginContent() {
     position: 'absolute' as const, right: '15px', top: '50%', transform: 'translateY(-50%)', 
     background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8' 
   };
+
+  // 🔥 REUSABLE ALPHANUMERIC CAPTCHA WIDGET 🔥
+  const renderCaptchaWidget = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '20px', marginBottom: '15px', background: 'rgba(0,0,0,0.4)', padding: '12px', borderRadius: '10px', border: '1px solid #38bdf8' }}>
+       <div style={{ 
+          fontSize: '20px', fontWeight: '900', color: '#facc15', letterSpacing: '4px', 
+          background: 'repeating-linear-gradient(45deg, #1e293b, #1e293b 5px, #0f172a 5px, #0f172a 10px)', 
+          padding: '10px 15px', borderRadius: '8px', userSelect: 'none', border: '1px solid #334155', fontStyle: 'italic', textShadow: '2px 2px 4px #000' 
+       }}>
+          {captchaText}
+       </div>
+       <input 
+          type="text" 
+          placeholder="CAPTCHA" 
+          value={userCaptcha} 
+          onChange={(e) => setUserCaptcha(e.target.value)} 
+          style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', fontSize: '16px', textAlign: 'center', outline: 'none', background: '#f8fafc', fontWeight: 'bold', color: '#0f172a', letterSpacing: '2px' }} 
+       />
+       <button type="button" onClick={generateCaptchaString} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', padding: '5px' }}>🔄</button>
+    </div>
+  );
 
   return (
     <div style={{ 
@@ -595,7 +667,20 @@ function LoginContent() {
 
         {forgotStep === 0 && !showOtpInput && (
           <>
-            {isLogin && !isAdmin && (
+            {/* 🔥 ADMIN TOGGLE (Master vs Subadmin) 🔥 */}
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '10px' }}>
+                <button type="button" onClick={() => {setAdminLoginType('master'); generateCaptchaString();}} style={{ flex: 1, padding: '10px', border: 'none', background: adminLoginType === 'master' ? '#38bdf8' : 'transparent', color: adminLoginType === 'master' ? '#0f172a' : '#94a3b8', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  🛡️ Master Admin
+                </button>
+                <button type="button" onClick={() => {setAdminLoginType('subadmin'); generateCaptchaString();}} style={{ flex: 1, padding: '10px', border: 'none', background: adminLoginType === 'subadmin' ? '#38bdf8' : 'transparent', color: adminLoginType === 'subadmin' ? '#0f172a' : '#94a3b8', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  🧑‍💻 Subadmin
+                </button>
+              </div>
+            )}
+
+            {/* 🔥 OTHER ROLES TOGGLE (Password vs OTP) 🔥 */}
+            {!isAdmin && isLogin && (
               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '10px', boxSizing: 'border-box', width: '100%' }}>
                 <button type="button" onClick={() => setLoginMethod('password')} style={{ flex: 1, padding: '12px', border: 'none', background: loginMethod === 'password' ? '#38bdf8' : 'transparent', color: loginMethod === 'password' ? '#0f172a' : '#94a3b8', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>
                   {t('Password', 'पासवर्ड')}
@@ -606,7 +691,8 @@ function LoginContent() {
               </div>
             )}
 
-            {isLogin && !isAdmin && loginMethod === 'password' && (
+            {/* PASSWORD LOGIN (Customer/Shop/Labour) */}
+            {!isAdmin && isLogin && loginMethod === 'password' && (
                 <div>
                     <input type="text" placeholder={t("Mobile Number or Email", "मोबाइल नंबर या ईमेल आईडी")} value={loginId} onChange={(e) => setLoginId(e.target.value)} style={inputStyle} />
                     
@@ -623,24 +709,41 @@ function LoginContent() {
                 </div>
             )}
 
-            {isLogin && !isAdmin && loginMethod === 'otp' && (
+            {/* OTP LOGIN (Customer/Shop/Labour) */}
+            {!isAdmin && isLogin && loginMethod === 'otp' && (
                 <div>
                     <input type="tel" placeholder={t("10-Digit Mobile Number", "10-अंकीय मोबाइल नंबर")} value={loginId} onChange={(e) => setLoginId(e.target.value)} maxLength={10} style={inputStyle} />
                     <button onClick={handleTriggerAuth} disabled={loading} style={buttonStyle}>{loading ? t("Sending...", "भेजा जा रहा है...") : t("Send OTP & Login", "OTP भेजें और लॉगिन करें")}</button>
                 </div>
             )}
 
-            {isAdmin && (
+            {/* 🔥 SUBADMIN OTP LOGIN WITH CAPTCHA 🔥 */}
+            {isAdmin && adminLoginType === 'subadmin' && (
                 <div>
-                    <input type="text" placeholder="Admin Email / Phone (e.g. admin@gmail.com)" value={loginId} onChange={(e) => setLoginId(e.target.value)} style={inputStyle} />
+                    <input type="tel" placeholder="Subadmin 10-Digit Mobile" value={loginId} onChange={(e) => setLoginId(e.target.value)} maxLength={10} style={inputStyle} />
+                    
+                    {renderCaptchaWidget()}
+
+                    <button onClick={handleTriggerAuth} disabled={loading} style={buttonStyle}>{loading ? "Sending OTP..." : "Verify & Send OTP"}</button>
+                </div>
+            )}
+
+            {/* 🔥 MASTER ADMIN LOGIN WITH CAPTCHA 🔥 */}
+            {isAdmin && adminLoginType === 'master' && (
+                <div>
+                    <input type="text" placeholder="Admin Email" value={loginId} onChange={(e) => setLoginId(e.target.value)} style={inputStyle} />
                     <div style={{ position: 'relative' }}>
                       <input type={showLoginPassword ? "text" : "password"} placeholder="Password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} style={{...inputStyle, paddingRight: '50px'}} />
                       <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} style={eyeBtnStyle}>{showLoginPassword ? '🙈' : '👁️'}</button>
                     </div>
-                    <button onClick={handleAdminLogin} disabled={loading} style={buttonStyle}>{loading ? "Processing..." : "Admin Login"}</button>
+
+                    {renderCaptchaWidget()}
+
+                    <button onClick={handleAdminLogin} disabled={loading} style={{...buttonStyle, background: '#ef4444', color: 'white'}}>{loading ? "Verifying..." : "Secure Master Login"}</button>
                 </div>
             )}
 
+            {/* SIGNUP SECTION (Non-Admin only) */}
             {!isLogin && !isAdmin && (
                 <div style={{ textAlign: 'left' }}>
                     <input type="text" placeholder={t("Full Name", "आपका पूरा नाम")} value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
