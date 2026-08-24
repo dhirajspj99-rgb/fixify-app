@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabaseClient';
 import { auth } from '@/firebase'; 
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'; 
 
-// 📍 Sabhi States ka data
 const locationData: any = {
   "Andaman and Nicobar Islands": {}, "Andhra Pradesh": {}, "Arunachal Pradesh": {}, "Assam": {},
   "Bihar": {
@@ -88,7 +87,6 @@ function LoginContent() {
   
   const isAdmin = role === 'admin';
 
-  // 🔥 RECAPTCHA FIX: Clear & Re-initialize to prevent crash
   useEffect(() => {
     if (window.recaptchaVerifier) {
        window.recaptchaVerifier.clear();
@@ -176,7 +174,6 @@ function LoginContent() {
     finally { setLoading(false); }
   };
 
-  // 🔥 MAIN LOGIC: Strict Array-Based Database Check 🔥
   const handleTriggerAuth = async () => {
     if (!isLogin && !isAdmin) {
       const finalState = stateName === 'Other' ? customState.trim() : stateName;
@@ -306,7 +303,7 @@ function LoginContent() {
           const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).single();
           if (data) {
             userFound = true;
-            localStorage.setItem('fixifiy_customer', JSON.stringify(data)); // 👈 Data Stored
+            localStorage.setItem('fixifiy_customer', JSON.stringify(data));
             targetUrl = '/customer-dashboard'; 
           }
         } else {
@@ -319,13 +316,13 @@ function LoginContent() {
             userFound = true;
             
             if (role.toLowerCase().includes('labour')) {
-               localStorage.setItem('fixifiy_labour', JSON.stringify(dbData)); // 👈 Labour Data Stored
+               localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
                targetUrl = '/labour-dashboard'; 
             } else if (role.toLowerCase().includes('shop')) {
-               localStorage.setItem('fixifiy_shop', JSON.stringify(dbData)); // 👈 Shop Data Stored
+               localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
                targetUrl = '/shop-owner-dashboard'; 
             } else if (role.toLowerCase().includes('delivery')) {
-               localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData)); // 👈 Delivery Data Stored
+               localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
                targetUrl = '/delivery'; 
             }
           }
@@ -393,7 +390,7 @@ function LoginContent() {
       const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).single();
       if (data) {
         userFound = true;
-        localStorage.setItem('fixifiy_customer', JSON.stringify(data)); // 👈 Password Login Customer Data Stored
+        localStorage.setItem('fixifiy_customer', JSON.stringify(data)); 
         targetUrl = '/customer-dashboard'; 
       }
     } else {
@@ -409,7 +406,7 @@ function LoginContent() {
            localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
            targetUrl = '/labour-dashboard'; 
         } else if (role.toLowerCase().includes('shop')) {
-           localStorage.setItem('fixifiy_shop', JSON.stringify(dbData)); // 👈 Password Login Shop Data Stored
+           localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
            targetUrl = '/shop-owner-dashboard'; 
         } else if (role.toLowerCase().includes('delivery')) {
            localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
@@ -729,7 +726,7 @@ function LoginContent() {
           </div>
         )}
 
-        {!showOtpInput && forgotTest === 0 && !isAdmin && (
+        {!showOtpInput && forgotStep === 0 && !isAdmin && (
           <div style={{ marginTop: '25px', textAlign: 'center' }}>
             <p style={{ cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }} onClick={() => setIsLogin(!isLogin)}>
               {isLogin ? (
