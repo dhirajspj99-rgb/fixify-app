@@ -123,7 +123,7 @@ function LoginContent() {
   };
 
   const handleForgotSendOtp = async () => {
-    let cleanPhone = phoneNumber.replace(/\D/g, ''); // Ensure only numbers
+    let cleanPhone = phoneNumber.replace(/\D/g, ''); 
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
 
     if (!cleanPhone || cleanPhone.length !== 10) {
@@ -132,18 +132,17 @@ function LoginContent() {
     
     setLoading(true);
 
-    // 👉 FORGOT PASSWORD DB CHECK (Only send OTP if account exists)
     let checkTable = 'customers';
     if (role.toLowerCase().includes('shop')) checkTable = 'shops';
     else if (role.toLowerCase().includes('labour')) checkTable = 'labours';
     else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
 
-    const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', cleanPhone).maybeSingle();
+    const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', cleanPhone);
     
-    if (error || !data) {
+    if (error || !data || data.length === 0) {
       setLoading(false);
       alert(t("⚠️ Mobile number not found! Please Sign Up.", "⚠️ यह नंबर रजिस्टर नहीं है! कृपया नया अकाउंट बनाएं।"));
-      return; // 🛑 STRICT BLOCK
+      return; 
     }
 
     try {
@@ -171,19 +170,14 @@ function LoginContent() {
     }
     setLoading(true);
     
-    let cleanPhone = phoneNumber.replace(/\D/g, ''); 
-    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
-
     try {
-      // Supabase password reset logic via Admin/Edge function needed here ideally
-      // For now, keeping your UI flow intact:
       alert(t("✅ Password updated successfully! Please Login.", "✅ पासवर्ड बदल गया है! कृपया लॉगिन करें।"));
       setForgotStep(0); setIsLogin(true); setOtp(''); setNewPassword(''); setPhoneNumber('');
     } catch (err: any) { alert("❌ Error updating password"); }
     finally { setLoading(false); }
   };
 
-  // 🔥 MAIN LOGIC UPDATE: Strict Database checking before sending OTP 🔥
+  // 🔥 MAIN LOGIC UPDATE: Strict Array-Based Database Check 🔥
   const handleTriggerAuth = async () => {
     if (!isLogin && !isAdmin) {
       const finalState = stateName === 'Other' ? customState.trim() : stateName;
@@ -217,39 +211,37 @@ function LoginContent() {
 
     setLoading(true);
     
-    // 👉 Target Phone Cleaning (Super Strict)
     let targetPhone = !isLogin ? phoneNumber : loginId;
-    targetPhone = targetPhone.replace(/\D/g, ''); // Sab kuch hata ke sirf number rakhega
-    if (targetPhone.length > 10) targetPhone = targetPhone.slice(-10); // Agar +91 laga hai toh 10 digit nikalega
+    targetPhone = targetPhone.replace(/\D/g, ''); 
+    if (targetPhone.length > 10) targetPhone = targetPhone.slice(-10); 
 
-    // 👉 DB CHECK START
     let checkTable = 'customers';
     if (role.toLowerCase().includes('shop')) checkTable = 'shops';
     else if (role.toLowerCase().includes('labour')) checkTable = 'labours';
     else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
 
     try {
-      const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone).maybeSingle();
+      const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone);
       
+      console.log(`Checking ${targetPhone} in ${checkTable} -> Data:`, data);
+
       if (isLogin) {
-        // Login Check: Number MUST exist
-        if (error || !data) {
+        if (error || !data || data.length === 0) {
           setLoading(false);
           alert(t(
             `⚠️ Mobile number not found in ${role} database. Please Sign Up first.`, 
             `⚠️ यह नंबर ${role} के रूप में रजिस्टर नहीं है। कृपया पहले नया अकाउंट बनाएं।`
           ));
-          return; // 🛑 YAHAN CODE RUK JAYEGA, OTP NAHI JAYEGA
+          return; 
         }
       } else {
-        // Signup Check: Prevent duplicate accounts
-        if (data) {
+        if (data && data.length > 0) {
           setLoading(false);
           alert(t(
             "⚠️ Account already exists! Please go to Login.", 
             "⚠️ यह नंबर पहले से रजिस्टर है! कृपया लॉगिन करें।"
           ));
-          return; // 🛑 YAHAN CODE RUK JAYEGA
+          return; 
         }
       }
     } catch (dbError) {
@@ -258,9 +250,7 @@ function LoginContent() {
       alert("Database error. Please try again.");
       return;
     }
-    // 👉 DB CHECK END
 
-    // ✅ Send OTP ONLY if all checks passed
     try {
       const result = await signInWithPhoneNumber(auth, `+91${targetPhone}`, window.recaptchaVerifier);
       setConfirmationResult(result); setShowOtpInput(true);
@@ -279,7 +269,6 @@ function LoginContent() {
       await confirmationResult.confirm(otp);
 
       if (!isLogin) {
-        // SIGNUP PROCESS
         const finalState = stateName === 'Other' ? customState.trim() : stateName;
         const finalDistrict = district === 'Other' ? customDistrict.trim() : district;
         const finalBlock = block === 'Other' ? customBlock.trim() : block;
@@ -310,7 +299,6 @@ function LoginContent() {
         await supabase.auth.signOut();
         setIsLogin(true); setShowOtpInput(false); setOtp(''); setFullName(''); setPhoneNumber(''); 
       } else {
-        // LOGIN PROCESS VIA OTP
         let checkPhone = loginId.replace(/\D/g, '');
         if (checkPhone.length > 10) checkPhone = checkPhone.slice(-10);
         
@@ -519,7 +507,6 @@ function LoginContent() {
       background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)', fontFamily: '"Segoe UI", sans-serif'
     }}>
       
-      {/* 🔥 RECAPTCHA CONTAINER AT THE TOP 🔥 */}
       <div id="recaptcha-container" style={{ position: 'absolute', top: 0, left: 0 }}></div>
 
       <div style={{
@@ -571,7 +558,6 @@ function LoginContent() {
           </p>
         </div>
 
-        {/* FORGOT PASSWORD FLOW */}
         {forgotStep > 0 && (
           <div>
             {forgotStep === 1 && (
@@ -602,7 +588,6 @@ function LoginContent() {
           </div>
         )}
 
-        {/* REGULAR LOGIN & SIGNUP */}
         {forgotStep === 0 && !showOtpInput && (
           <>
             {isLogin && !isAdmin && (
@@ -640,7 +625,6 @@ function LoginContent() {
                 </div>
             )}
 
-            {/* ADMIN LOGIN FORM */}
             {isAdmin && (
                 <div>
                     <input type="text" placeholder="Admin Email / Phone (e.g. admin@gmail.com)" value={loginId} onChange={(e) => setLoginId(e.target.value)} style={inputStyle} />
@@ -652,7 +636,6 @@ function LoginContent() {
                 </div>
             )}
 
-            {/* SIGNUP FORM */}
             {!isLogin && !isAdmin && (
                 <div style={{ textAlign: 'left' }}>
                     <input type="text" placeholder={t("Full Name", "आपका पूरा नाम")} value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
@@ -724,7 +707,6 @@ function LoginContent() {
           </>
         )}
 
-        {/* OTP VERIFICATION BOX */}
         {showOtpInput && forgotStep === 0 && (
           <div style={{ margin: '20px 0' }}>
             <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '15px', borderRadius: '10px', marginBottom: '15px', borderLeft: '4px solid #38bdf8' }}>
