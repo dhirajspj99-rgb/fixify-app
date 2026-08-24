@@ -88,12 +88,21 @@ function LoginContent() {
   
   const isAdmin = role === 'admin';
 
+  // 🔥 RECAPTCHA FIX: Clear & Re-initialize to prevent crash
   useEffect(() => {
-    if (!window.recaptchaVerifier) {
+    if (window.recaptchaVerifier) {
+       window.recaptchaVerifier.clear();
+       window.recaptchaVerifier = undefined;
+    }
+
+    try {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
         callback: (response: any) => {},
       });
+      window.recaptchaVerifier.render();
+    } catch (err) {
+      console.log("Recaptcha Init Error: ", err);
     }
   }, []);
 
@@ -149,6 +158,7 @@ function LoginContent() {
     finally { setLoading(false); }
   };
 
+  // 🔥 MAIN LOGIC UPDATE: Checking Database before sending OTP 🔥
   const handleTriggerAuth = async () => {
     if (!isLogin && !isAdmin) {
       const finalState = stateName === 'Other' ? customState.trim() : stateName;
@@ -168,7 +178,7 @@ function LoginContent() {
         alert(t("Enter valid 10-digit number.", "कृपया सही 10-अंकीय मोबाइल नंबर डालें।")); return;
       }
       if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,12}$/.test(signupPassword)) {
-        alert(t("⚠️ Password must be 6-12 chars (1 Capital, 1 Number, 1 Symbol).", "⚠️ पासवर्ड 6-12 अक्षरों का हो (1 Capital, 1 Number, 1 Symbol)।")); return; 
+        alert(t("⚠️ Password must be 6-12 chars.", "⚠️ पासवर्ड 6-12 अक्षरों का हो (1 Capital, 1 Number, 1 Symbol)।")); return; 
       }
     } 
     
@@ -184,12 +194,47 @@ function LoginContent() {
     let targetPhone = !isLogin ? phoneNumber.trim() : loginId.trim();
     if (targetPhone.startsWith('+91')) targetPhone = targetPhone.replace('+91', '').trim();
 
+    // 👉 DB CHECK START
+    let checkTable = 'customers';
+    if (role.toLowerCase().includes('shop')) checkTable = 'shops';
+    else if (role.toLowerCase().includes('labour')) checkTable = 'labours';
+    else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
+
+    if (isLogin) {
+      // Login Check: Number must exist in the correct role table
+      const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone).maybeSingle();
+      if (!data) {
+        setLoading(false);
+        alert(t(
+          `⚠️ Mobile number not found in ${role} database. Please Sign Up first.`, 
+          `⚠️ यह नंबर ${role} के रूप में रजिस्टर नहीं है। कृपया पहले नया अकाउंट बनाएं।`
+        ));
+        return; 
+      }
+    } else {
+      // Signup Check: Prevent duplicate accounts
+      const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone).maybeSingle();
+      if (data) {
+        setLoading(false);
+        alert(t(
+          "⚠️ Account already exists! Please go to Login.", 
+          "⚠️ यह नंबर पहले से रजिस्टर है! कृपया लॉगिन करें।"
+        ));
+        return; 
+      }
+    }
+    // 👉 DB CHECK END
+
+    // Send OTP if checks pass
     try {
       const result = await signInWithPhoneNumber(auth, `+91${targetPhone}`, window.recaptchaVerifier);
       setConfirmationResult(result); setShowOtpInput(true);
       alert(t("✅ OTP sent to your mobile for verification!", "✅ वेरिफिकेशन के लिए आपके मोबाइल नंबर पर OTP भेज दिया गया है!"));
-    } catch (error: any) { alert("❌ OTP Error: " + error.message); } 
-    finally { setLoading(false); }
+    } catch (error: any) { 
+      alert("❌ OTP Error: " + error.message); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleVerifyOtpAndProcess = async () => {
@@ -251,7 +296,6 @@ function LoginContent() {
             
             userFound = true;
             
-            // 🔥 ALL REDIRECTS FIXED 🔥
             if (role.toLowerCase().includes('labour')) {
                localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
                targetUrl = '/labour-dashboard'; 
@@ -339,7 +383,6 @@ function LoginContent() {
         
         userFound = true;
 
-        // 🔥 ALL REDIRECTS FIXED 🔥
         if (role.toLowerCase().includes('labour')) {
            localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
            targetUrl = '/labour-dashboard'; 
@@ -413,10 +456,7 @@ function LoginContent() {
     }
 
     alert(t("Admin Login Successful!", "एडमिन लॉगिन सफल!")); 
-    
-    // 🔥 ADMIN 404 ERROR FIX 🔥
     router.push('/admin-dashboard'); 
-    
     setLoading(false);
   };
 
@@ -442,6 +482,9 @@ function LoginContent() {
       background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)', fontFamily: '"Segoe UI", sans-serif'
     }}>
       
+      {/* 🔥 RECAPTCHA CONTAINER AT THE TOP 🔥 */}
+      <div id="recaptcha-container" style={{ position: 'absolute', top: 0, left: 0 }}></div>
+
       <div style={{
         position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%',
         transform: 'rotate(-15deg)', zIndex: 0, pointerEvents: 'none',
@@ -674,8 +717,6 @@ function LoginContent() {
             </button>
           </div>
         )}
-
-        <div id="recaptcha-container"></div>
 
         {!showOtpInput && forgotStep === 0 && !isAdmin && (
           <div style={{ marginTop: '25px', textAlign: 'center' }}>
