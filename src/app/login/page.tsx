@@ -123,12 +123,31 @@ function LoginContent() {
   };
 
   const handleForgotSendOtp = async () => {
-    if (!phoneNumber || !/^\d{10}$/.test(phoneNumber.trim())) {
+    let cleanPhone = phoneNumber.replace(/\D/g, ''); // Ensure only numbers
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
+    if (!cleanPhone || cleanPhone.length !== 10) {
       alert(t("Enter a valid 10-digit mobile number.", "कृपया सही 10-अंकीय मोबाइल नंबर डालें।")); return;
     }
+    
     setLoading(true);
+
+    // 👉 FORGOT PASSWORD DB CHECK (Only send OTP if account exists)
+    let checkTable = 'customers';
+    if (role.toLowerCase().includes('shop')) checkTable = 'shops';
+    else if (role.toLowerCase().includes('labour')) checkTable = 'labours';
+    else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
+
+    const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', cleanPhone).maybeSingle();
+    
+    if (error || !data) {
+      setLoading(false);
+      alert(t("⚠️ Mobile number not found! Please Sign Up.", "⚠️ यह नंबर रजिस्टर नहीं है! कृपया नया अकाउंट बनाएं।"));
+      return; // 🛑 STRICT BLOCK
+    }
+
     try {
-      const result = await signInWithPhoneNumber(auth, `+91${phoneNumber.trim()}`, window.recaptchaVerifier);
+      const result = await signInWithPhoneNumber(auth, `+91${cleanPhone}`, window.recaptchaVerifier);
       setConfirmationResult(result); setForgotStep(2);
       alert(t("✅ OTP sent!", "✅ OTP भेज दिया गया है!"));
     } catch (err: any) { alert("❌ OTP Error: " + err.message); } 
@@ -151,14 +170,20 @@ function LoginContent() {
       alert(t("⚠️ Password must be 6-12 chars (1 Capital, 1 Number, 1 Symbol).", "⚠️ पासवर्ड 6-12 अक्षरों का हो (1 Capital, 1 Number, 1 Symbol ज़रूरी है)।")); return; 
     }
     setLoading(true);
+    
+    let cleanPhone = phoneNumber.replace(/\D/g, ''); 
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
     try {
+      // Supabase password reset logic via Admin/Edge function needed here ideally
+      // For now, keeping your UI flow intact:
       alert(t("✅ Password updated successfully! Please Login.", "✅ पासवर्ड बदल गया है! कृपया लॉगिन करें।"));
       setForgotStep(0); setIsLogin(true); setOtp(''); setNewPassword(''); setPhoneNumber('');
     } catch (err: any) { alert("❌ Error updating password"); }
     finally { setLoading(false); }
   };
 
-  // 🔥 MAIN LOGIC UPDATE: Checking Database before sending OTP 🔥
+  // 🔥 MAIN LOGIC UPDATE: Strict Database checking before sending OTP 🔥
   const handleTriggerAuth = async () => {
     if (!isLogin && !isAdmin) {
       const finalState = stateName === 'Other' ? customState.trim() : stateName;
@@ -191,8 +216,11 @@ function LoginContent() {
     if (isAdmin) { handleAdminLogin(); return; }
 
     setLoading(true);
-    let targetPhone = !isLogin ? phoneNumber.trim() : loginId.trim();
-    if (targetPhone.startsWith('+91')) targetPhone = targetPhone.replace('+91', '').trim();
+    
+    // 👉 Target Phone Cleaning (Super Strict)
+    let targetPhone = !isLogin ? phoneNumber : loginId;
+    targetPhone = targetPhone.replace(/\D/g, ''); // Sab kuch hata ke sirf number rakhega
+    if (targetPhone.length > 10) targetPhone = targetPhone.slice(-10); // Agar +91 laga hai toh 10 digit nikalega
 
     // 👉 DB CHECK START
     let checkTable = 'customers';
@@ -200,32 +228,39 @@ function LoginContent() {
     else if (role.toLowerCase().includes('labour')) checkTable = 'labours';
     else if (role.toLowerCase().includes('delivery')) checkTable = 'delivery_boys';
 
-    if (isLogin) {
-      // Login Check: Number must exist in the correct role table
+    try {
       const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone).maybeSingle();
-      if (!data) {
-        setLoading(false);
-        alert(t(
-          `⚠️ Mobile number not found in ${role} database. Please Sign Up first.`, 
-          `⚠️ यह नंबर ${role} के रूप में रजिस्टर नहीं है। कृपया पहले नया अकाउंट बनाएं।`
-        ));
-        return; 
+      
+      if (isLogin) {
+        // Login Check: Number MUST exist
+        if (error || !data) {
+          setLoading(false);
+          alert(t(
+            `⚠️ Mobile number not found in ${role} database. Please Sign Up first.`, 
+            `⚠️ यह नंबर ${role} के रूप में रजिस्टर नहीं है। कृपया पहले नया अकाउंट बनाएं।`
+          ));
+          return; // 🛑 YAHAN CODE RUK JAYEGA, OTP NAHI JAYEGA
+        }
+      } else {
+        // Signup Check: Prevent duplicate accounts
+        if (data) {
+          setLoading(false);
+          alert(t(
+            "⚠️ Account already exists! Please go to Login.", 
+            "⚠️ यह नंबर पहले से रजिस्टर है! कृपया लॉगिन करें।"
+          ));
+          return; // 🛑 YAHAN CODE RUK JAYEGA
+        }
       }
-    } else {
-      // Signup Check: Prevent duplicate accounts
-      const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone).maybeSingle();
-      if (data) {
-        setLoading(false);
-        alert(t(
-          "⚠️ Account already exists! Please go to Login.", 
-          "⚠️ यह नंबर पहले से रजिस्टर है! कृपया लॉगिन करें।"
-        ));
-        return; 
-      }
+    } catch (dbError) {
+      console.error("DB Check Failed:", dbError);
+      setLoading(false);
+      alert("Database error. Please try again.");
+      return;
     }
     // 👉 DB CHECK END
 
-    // Send OTP if checks pass
+    // ✅ Send OTP ONLY if all checks passed
     try {
       const result = await signInWithPhoneNumber(auth, `+91${targetPhone}`, window.recaptchaVerifier);
       setConfirmationResult(result); setShowOtpInput(true);
@@ -248,7 +283,7 @@ function LoginContent() {
         const finalState = stateName === 'Other' ? customState.trim() : stateName;
         const finalDistrict = district === 'Other' ? customDistrict.trim() : district;
         const finalBlock = block === 'Other' ? customBlock.trim() : block;
-        const dummyEmail = `${phoneNumber}@fixifiy.in`;
+        const dummyEmail = `${phoneNumber.trim()}@fixifiy.in`;
 
         const { error: authError } = await supabase.auth.signUp({ 
           email: dummyEmail, password: signupPassword,
@@ -276,7 +311,9 @@ function LoginContent() {
         setIsLogin(true); setShowOtpInput(false); setOtp(''); setFullName(''); setPhoneNumber(''); 
       } else {
         // LOGIN PROCESS VIA OTP
-        const checkPhone = loginId.trim();
+        let checkPhone = loginId.replace(/\D/g, '');
+        if (checkPhone.length > 10) checkPhone = checkPhone.slice(-10);
+        
         let userFound = false;
         let targetUrl = '/'; 
 
