@@ -169,7 +169,6 @@ function LoginContent() {
       alert(t("⚠️ Password must be 6-12 chars (1 Capital, 1 Number, 1 Symbol).", "⚠️ पासवर्ड 6-12 अक्षरों का हो (1 Capital, 1 Number, 1 Symbol ज़रूरी है)।")); return; 
     }
     setLoading(true);
-    
     try {
       alert(t("✅ Password updated successfully! Please Login.", "✅ पासवर्ड बदल गया है! कृपया लॉगिन करें।"));
       setForgotStep(0); setIsLogin(true); setOtp(''); setNewPassword(''); setPhoneNumber('');
@@ -177,7 +176,7 @@ function LoginContent() {
     finally { setLoading(false); }
   };
 
-  // 🔥 MAIN LOGIC UPDATE: Strict Array-Based Database Check 🔥
+  // 🔥 MAIN LOGIC: Strict Array-Based Database Check 🔥
   const handleTriggerAuth = async () => {
     if (!isLogin && !isAdmin) {
       const finalState = stateName === 'Other' ? customState.trim() : stateName;
@@ -223,8 +222,6 @@ function LoginContent() {
     try {
       const { data, error } = await supabase.from(checkTable).select('phone').eq('phone', targetPhone);
       
-      console.log(`Checking ${targetPhone} in ${checkTable} -> Data:`, data);
-
       if (isLogin) {
         if (error || !data || data.length === 0) {
           setLoading(false);
@@ -309,7 +306,7 @@ function LoginContent() {
           const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).single();
           if (data) {
             userFound = true;
-            localStorage.setItem('fixifiy_customer', JSON.stringify(data));
+            localStorage.setItem('fixifiy_customer', JSON.stringify(data)); // 👈 Data Stored
             targetUrl = '/customer-dashboard'; 
           }
         } else {
@@ -322,13 +319,13 @@ function LoginContent() {
             userFound = true;
             
             if (role.toLowerCase().includes('labour')) {
-               localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
+               localStorage.setItem('fixifiy_labour', JSON.stringify(dbData)); // 👈 Labour Data Stored
                targetUrl = '/labour-dashboard'; 
             } else if (role.toLowerCase().includes('shop')) {
-               localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
+               localStorage.setItem('fixifiy_shop', JSON.stringify(dbData)); // 👈 Shop Data Stored
                targetUrl = '/shop-owner-dashboard'; 
             } else if (role.toLowerCase().includes('delivery')) {
-               localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
+               localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData)); // 👈 Delivery Data Stored
                targetUrl = '/delivery'; 
             }
           }
@@ -396,7 +393,7 @@ function LoginContent() {
       const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).single();
       if (data) {
         userFound = true;
-        localStorage.setItem('fixifiy_customer', JSON.stringify(data)); 
+        localStorage.setItem('fixifiy_customer', JSON.stringify(data)); // 👈 Password Login Customer Data Stored
         targetUrl = '/customer-dashboard'; 
       }
     } else {
@@ -412,7 +409,7 @@ function LoginContent() {
            localStorage.setItem('fixifiy_labour', JSON.stringify(dbData));
            targetUrl = '/labour-dashboard'; 
         } else if (role.toLowerCase().includes('shop')) {
-           localStorage.setItem('fixifiy_shop', JSON.stringify(dbData));
+           localStorage.setItem('fixifiy_shop', JSON.stringify(dbData)); // 👈 Password Login Shop Data Stored
            targetUrl = '/shop-owner-dashboard'; 
         } else if (role.toLowerCase().includes('delivery')) {
            localStorage.setItem('fixifiy_delivery_boy', JSON.stringify(dbData));
@@ -435,13 +432,8 @@ function LoginContent() {
     if (!loginId || !loginPassword) { alert(t("Enter Admin ID & Password!", "एडमिन आईडी और पासवर्ड भरें!")); return; }
     
     let finalEmail = loginId.trim();
-    
     if (!finalEmail.includes('@')) {
-      if (/^\d{10}$/.test(finalEmail)) {
-        finalEmail = `${finalEmail}@fixifiy.in`;
-      } else {
-        finalEmail = `${finalEmail}@fixifiy.in`;
-      }
+      finalEmail = `${finalEmail}@fixifiy.in`;
     }
 
     const attemptKey = `admin_attempts_${finalEmail}`;
@@ -737,7 +729,7 @@ function LoginContent() {
           </div>
         )}
 
-        {!showOtpInput && forgotStep === 0 && !isAdmin && (
+        {!showOtpInput && forgotTest === 0 && !isAdmin && (
           <div style={{ marginTop: '25px', textAlign: 'center' }}>
             <p style={{ cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }} onClick={() => setIsLogin(!isLogin)}>
               {isLogin ? (
