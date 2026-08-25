@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
 import { auth } from '@/firebase'; 
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'; 
 
-const locationData: Record<string, Record<string, string[]>> = {
+const locationData: any = {
   "Andaman and Nicobar Islands": {}, "Andhra Pradesh": {}, "Arunachal Pradesh": {}, "Assam": {},
   "Bihar": {
     "Patna": ["Patna Sadar", "Danapur", "Barh", "Masaurhi", "Paliganj", "Patna City", "Phulwari Sharif"],
@@ -34,13 +34,14 @@ const locationData: Record<string, Record<string, string[]>> = {
 
 function LoginContent() {
   const router = useRouter();
-  const role = 'customer'; 
+  const role = 'customer'; // 🔥 Sirf Customer ke liye fix kar diya gaya hai
   
   const [lang, setLang] = useState<'EN' | 'HI'>('HI');
   const t = (en: string, hi: string) => lang === 'EN' ? en : hi;
   
   const [isLogin, setIsLogin] = useState(true);
   const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
+  
   const [forgotStep, setForgotStep] = useState<0 | 1 | 2 | 3>(0);
   
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -65,22 +66,21 @@ function LoginContent() {
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  
   const [newPassword, setNewPassword] = useState('');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (window.recaptchaVerifier) {
+       window.recaptchaVerifier.clear();
+       window.recaptchaVerifier = undefined;
+    }
 
     try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-          size: "invisible",
-          callback: () => {},
-          'expired-callback': () => {}
-        });
-        window.recaptchaVerifier.render().catch((err) => {
-          console.log("Recaptcha render error:", err);
-        });
-      }
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible",
+        callback: (response: any) => {},
+      });
+      window.recaptchaVerifier.render();
     } catch (err) {
       console.log("Recaptcha Init Error: ", err);
     }
@@ -130,15 +130,14 @@ function LoginContent() {
   };
 
   const handleSetNewPassword = async () => {
-    if (!newPassword) {
-      alert(t("Enter new password", "नया पासवर्ड दर्ज करें"));
-      return;
+    if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,12}$/.test(newPassword)) {
+      alert(t("⚠️ Password must be 6-12 chars (1 Capital, 1 Number, 1 Symbol).", "⚠️ पासवर्ड 6-12 अक्षरों का हो (1 Capital, 1 Number, 1 Symbol ज़रूरी है)।")); return; 
     }
     setLoading(true);
     try {
       alert(t("✅ Password updated successfully! Please Login.", "✅ पासवर्ड बदल गया है! कृपया लॉगिन करें।"));
       setForgotStep(0); setIsLogin(true); setOtp(''); setNewPassword(''); setPhoneNumber('');
-    } catch (err: any) { alert("❌ Error updating password: " + err.message); }
+    } catch (err: any) { alert("❌ Error updating password"); }
     finally { setLoading(false); }
   };
 
@@ -153,6 +152,9 @@ function LoginContent() {
       }
       if (!/^\d{10}$/.test(phoneNumber)) {
         alert(t("Enter valid 10-digit number.", "कृपया सही 10-अंकीय मोबाइल नंबर डालें।")); return;
+      }
+      if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,12}$/.test(signupPassword)) {
+        alert(t("⚠️ Password must be 6-12 chars.", "⚠️ पासवर्ड 6-12 अक्षरों का हो (1 Capital, 1 Number, 1 Symbol)।")); return; 
       }
     } 
     
@@ -211,44 +213,48 @@ function LoginContent() {
         const finalState = stateName === 'Other' ? customState.trim() : stateName;
         const finalDistrict = district === 'Other' ? customDistrict.trim() : district;
         const finalBlock = block === 'Other' ? customBlock.trim() : block;
-        const dummyEmail = `${phoneNumber.trim()}@fixify.in`;
+        const dummyEmail = `${phoneNumber.trim()}@fixifiy.in`;
 
         const { error: authError } = await supabase.auth.signUp({ 
           email: dummyEmail, password: signupPassword,
           options: { data: { role, full_name: fullName, phone_number: phoneNumber, state: finalState, district: finalDistrict, block: finalBlock, address } }
         });
         
-        if (authError) { 
-          console.log("Auth signup warning (may already exist):", authError.message); 
-        } 
+        if (authError) { alert("Signup Error: " + authError.message); setLoading(false); return; } 
         
-        const { error: dbError } = await supabase.from('customers').insert([{ 
+        const { data: newCust, error: dbError } = await supabase.from('customers').insert([{ 
           name: fullName, phone: phoneNumber, state: finalState, district: finalDistrict, block: finalBlock, address, upi_id: upiId 
-        }]);
-        
+        }]).select().maybeSingle();
+
         if (dbError) {
-          console.log("DB Insert info:", dbError.message);
+          alert("Database Error: " + dbError.message);
+          setLoading(false);
+          return;
+        }
+
+        if (newCust) {
+          localStorage.setItem('fixifiy_customer', JSON.stringify(newCust));
         }
 
         alert(t("✅ Account successfully created!", "✅ अकाउंट सफलतापूर्वक बन गया है!"));
-        await supabase.auth.signOut();
-        setIsLogin(true); setShowOtpInput(false); setOtp(''); setFullName(''); setPhoneNumber(''); 
+        router.push('/customer-dashboard'); // 🔥 Redirect to customer dashboard
       } else {
         let checkPhone = loginId.replace(/\D/g, '');
         if (checkPhone.length > 10) checkPhone = checkPhone.slice(-10);
         
         const { data } = await supabase.from('customers').select('*').eq('phone', checkPhone).maybeSingle();
         if (data) {
-          localStorage.setItem('fixify_customer', JSON.stringify(data));
+          localStorage.setItem('fixifiy_customer', JSON.stringify(data));
           alert(t("Login Successful via OTP!", "OTP के ज़रिये लॉगिन सफल!")); 
-          router.push('/'); 
+          router.push('/customer-dashboard'); // 🔥 Redirect to customer dashboard
         } else {
+          await supabase.auth.signOut();
           alert(t("⚠️ Mobile number not found in database.", "⚠️ डेटाबेस में नंबर नहीं मिला।")); 
         }
       }
     } catch (err: any) { 
       console.error("OTP verification error:", err);
-      alert(t("Verification Failed: " + err.message, "वेरिफिकेशन फेल: " + err.message)); 
+      alert(t("Verification Failed: Invalid OTP", "वेरिफिकेशन फेल: गलत OTP")); 
     } finally { 
       setLoading(false); 
     }
@@ -257,12 +263,15 @@ function LoginContent() {
   const handlePasswordLogin = async () => {
     if (!loginId || !loginPassword) { alert(t("Enter ID and Password!", "कृपया आईडी और पासवर्ड भरें!")); return; }
     
-    let cleanPhone = loginId.replace(/\D/g, '');
-    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+    let finalEmail = loginId.trim();
+    const isPhoneLogin = /^\d{10}$/.test(finalEmail);
+    if (isPhoneLogin) finalEmail = `${finalEmail}@fixifiy.in`;
+
+    let cleanPhone = isPhoneLogin ? loginId.trim() : loginId.split('@')[0];
 
     setLoading(true);
 
-    // Smart Bypass: Check directly in customers table first for smooth login
+    // Direct database check for smooth customer login
     const { data: customerData, error: customerError } = await supabase
       .from('customers')
       .select('*')
@@ -270,30 +279,24 @@ function LoginContent() {
       .maybeSingle();
 
     if (!customerError && customerData) {
-      // If customer exists in database, allow direct login
-      localStorage.setItem('fixify_customer', JSON.stringify(customerData));
+      localStorage.setItem('fixifiy_customer', JSON.stringify(customerData));
       alert(t("Login Successful!", "लॉगिन सफल!"));
-      router.push('/');
+      router.push('/customer-dashboard'); // 🔥 Redirect to customer dashboard
       setLoading(false);
       return;
     }
 
-    // Fallback to Supabase Auth if not found directly in customers table
-    let finalEmail = loginId.trim();
-    if (/^\d{10}$/.test(finalEmail)) finalEmail = `${finalEmail}@fixify.in`;
-
     const { data: authData, error } = await supabase.auth.signInWithPassword({ email: finalEmail, password: loginPassword });
     
     if (error) { 
-      alert(t("❌ Login Failed. Please check number or sign up.", "❌ लॉगिन असफल। कृपया नंबर जाँचें या साइन अप करें।"));
-      setLoading(false); 
-      return; 
+      alert(t(`❌ Login Failed: ${error.message}`, `❌ लॉगिन असफल: ${error.message}`));
+      setLoading(false); return; 
     }
 
     const fallbackCustomer = { name: authData.user?.user_metadata?.full_name || 'Customer', phone: cleanPhone };
-    localStorage.setItem('fixify_customer', JSON.stringify(fallbackCustomer));
-    alert(t("Login Successful!", "लॉगिन सफल!"));
-    router.push('/');
+    localStorage.setItem('fixifiy_customer', JSON.stringify(fallbackCustomer));
+    alert(t("Login Successful!", "लॉगिन सफल!")); 
+    router.push('/customer-dashboard'); // 🔥 Redirect to customer dashboard
     setLoading(false);
   };
 
@@ -438,6 +441,7 @@ function LoginContent() {
                     {block === 'Other' && <input type="text" placeholder={t('Enter Block Name', 'ब्लॉक का नाम लिखें')} value={customBlock} onChange={(e) => setCustomBlock(e.target.value)} style={{...inputStyle, borderColor: '#38bdf8'}} />}
                     
                     <textarea placeholder={t("Full Address (Gali/Pincode)", "पूरा पता (गली / मोहल्ला / पिनकोड)")} value={address} onChange={(e) => setAddress(e.target.value)} style={{...inputStyle, height: '90px', resize:'none'}} />
+                    <input type="text" placeholder={t("UPI ID (Optional)", "UPI ID (ऑप्शनल)")} value={upiId} onChange={(e) => setUpiId(e.target.value)} style={inputStyle} />
 
                     <div style={{ position: 'relative', marginTop: '15px', marginBottom: '15px' }}>
                       <input type={showSignupPassword ? "text" : "password"} placeholder={t("Create Password", "पासवर्ड बनाएं")} value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} maxLength={12} style={{...inputStyle, paddingRight: '50px', margin: 0}} />

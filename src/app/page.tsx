@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from '@/supabase'; 
 import { useRouter } from 'next/navigation';
 
-export default function GuestHomePage() {
+export default function HomePage() {
   const router = useRouter();
   
   const [productsData, setProductsData] = useState<any[]>([]);
@@ -15,8 +15,9 @@ export default function GuestHomePage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [mistriFilter, setMistriFilter] = useState<string>("All");
   
-  // 🔥 Logged-in customer state
+  // Logged-in customer state
   const [loggedInCustomer, setLoggedInCustomer] = useState<any>(null);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
 
   const t = (enText: string, hiText: string) => lang === 'EN' ? enText : hiText;
 
@@ -54,11 +55,12 @@ export default function GuestHomePage() {
   };
 
   useEffect(() => {
-    // Check if customer is logged in from localStorage
     const savedCustomer = localStorage.getItem('fixify_customer');
     if (savedCustomer) {
       try {
-        setLoggedInCustomer(JSON.parse(savedCustomer));
+        const cust = JSON.parse(savedCustomer);
+        setLoggedInCustomer(cust);
+        fetchCustomerOrders(cust.phone);
       } catch (e) {
         console.error(e);
       }
@@ -89,6 +91,15 @@ export default function GuestHomePage() {
     };
     fetchData();
   }, []);
+
+  const fetchCustomerOrders = async (phone: string) => {
+    try {
+      const { data } = await supabase.from('orders').select('*').eq('customer_phone', phone).order('id', { ascending: false });
+      if (data) setCustomerOrders(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleViewItem = (item: any, isMistri: boolean = false) => {
     const type = isMistri ? 'mistri' : 'product';
@@ -160,14 +171,14 @@ export default function GuestHomePage() {
     .dept-pill-active { background: #16a34a; color: white; border-color: #16a34a; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3); }
   `;
 
-  if (loading) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f8fafc', color: '#2874f0' }}><h2>{t('Loading Shop Data...', 'शॉप डेटा लोड हो रहा है...')}</h2></div>;
+  if (loading) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f8fafc', color: '#2874f0' }}><h2>{t('Loading Data...', 'डेटा लोड हो रहा है...')}</h2></div>;
 
   return (
     <div className="main-bg">
       <style>{sharedStyles}</style>
       
       {/* HEADER */}
-      <div style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(15px)', position: 'sticky', top: 0, zIndex: 100, padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
+      <div style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(15px)', position: 'sticky', top: 0, zIndex: 100, padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
         <div style={{ fontSize: '28px', fontWeight: '900', fontStyle: 'italic', color: '#0f172a', letterSpacing: '-1px' }}>
           F<span style={{color: '#fb641b'}}>i</span>x<span style={{color: '#2874f0'}}>i</span>fiy
         </div>
@@ -177,9 +188,11 @@ export default function GuestHomePage() {
           </div>
 
           {loggedInCustomer ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>👤 {loggedInCustomer.name}</span>
-              <button onClick={() => { localStorage.removeItem('fixify_customer'); setLoggedInCustomer(null); router.refresh(); }} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ background: '#e0f2fe', padding: '6px 14px', borderRadius: '25px', border: '1px solid #38bdf8' }}>
+                <span style={{ fontWeight: 'bold', color: '#0369a1', fontSize: '14px' }}>👤 {loggedInCustomer.name}</span>
+              </div>
+              <button onClick={() => { localStorage.removeItem('fixify_customer'); setLoggedInCustomer(null); window.location.reload(); }} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
                 {t('Logout', 'लॉग आउट')}
               </button>
             </div>
@@ -191,29 +204,73 @@ export default function GuestHomePage() {
         </div>
       </div>
 
-      {/* HERO BANNER */}
-      <div className="hero-banner">
-        <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '6px 16px', borderRadius: '25px', fontSize: 'clamp(10px, 2vw, 12px)', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '15px', color: '#fbbf24', border: '1px solid rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>
-          🇮🇳 {t("India's No. 1 E-Commerce Sale & Service", "भारत का नं. 1 ई-कॉमर्स और सर्विस प्लेटफॉर्म")}
-        </div>
-        <br/>
-        <div className="brand-logo-card">
-          <div className="brand-text-logo">
-            <span style={{ color: '#0a192f' }}>F</span><span style={{ color: '#0a192f' }}>i</span>
-            <span style={{ color: '#fb641b', position: 'relative' }}>x<span style={{ position: 'absolute', top: '-10px', right: '-12px', fontSize: 'clamp(16px, 3vw, 24px)' }}>🛒</span></span>
-            <span style={{ color: '#0a192f' }}>i</span><span style={{ color: '#0a192f' }}>f</span><span style={{ color: '#0a192f' }}>i</span><span style={{ color: '#0a192f' }}>y</span>
+      {/* 🚀 AGAR LOGGED-IN HAI TOH CUSTOMER DASHBOARD DIKHEGA, WARNA GUEST BANNER */}
+      {loggedInCustomer ? (
+        <div style={{ maxWidth: '1100px', margin: '30px auto', padding: '0 20px' }}>
+          
+          {/* DASHBOARD WELCOME CARD */}
+          <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)', borderRadius: '20px', padding: '30px', color: 'white', boxShadow: '0 10px 30px rgba(15,23,42,0.2)', marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+            <div>
+              <span style={{ background: '#38bdf8', color: '#0f172a', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                {t('Customer Dashboard', 'कस्टमर डैशबोर्ड')}
+              </span>
+              <h1 style={{ margin: '10px 0 5px 0', fontSize: '26px' }}>{t('Welcome back,', 'स्वागत है,')} {loggedInCustomer.name}! 👋</h1>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '14px' }}>📞 {loggedInCustomer.phone} | 📍 {loggedInCustomer.district || ''}, {loggedInCustomer.state || ''}</p>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '15px 25px', borderRadius: '15px', border: '1px solid rgba(255,255,255,0.2)' }}>
+              <span style={{ fontSize: '12px', color: '#cbd5e1', display: 'block' }}>{t('Wallet Balance', 'वॉलेट बैलेंस')}</span>
+              <span style={{ fontSize: '24px', fontWeight: '900', color: '#4ade80' }}>₹{loggedInCustomer.wallet_balance || '0'}</span>
+            </div>
           </div>
+
+          {/* CUSTOMER ORDERS SUMMARY SECTION */}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', marginBottom: '40px' }}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+              📦 {t('My Orders & Bookings', 'मेरे ऑर्डर्स और बुकिंग्स')} ({customerOrders.length})
+            </h2>
+            {customerOrders.length === 0 ? (
+              <p style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>{t('No active orders found.', 'कोई एक्टिव ऑर्डर नहीं मिला। नीचे दिए गए प्रोडक्ट्स में से खरीदारी करें!')}</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {customerOrders.map((ord, idx) => (
+                  <div key={idx} style={{ background: '#f8fafc', padding: '15px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong>{ord.item_name || 'Product'}</strong>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>Status: {ord.status || 'Pending'}</div>
+                    </div>
+                    <div style={{ color: '#16a34a', fontWeight: 'bold' }}>₹{ord.total_price || '0'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
-        <h1 style={{ fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 800, margin: '10px 0 8px 0', lineHeight: 1.3, color: '#f8fafc' }}>
-          {t("Everything You Need, All In One Place! ✨", "यहाँ मिलेगा सब कुछ, एक ही जगह! ✨")}
-        </h1>
-        <p style={{ fontSize: 'clamp(13px, 2.5vw, 15px)', opacity: 0.9, maxWidth: '700px', margin: '0 auto', color: '#cbd5e1', lineHeight: '1.5' }}>
-          {t("From A to Z Products to Verified Premium Mistris, experience the best of both worlds.", "A to Z प्रोडक्ट्स से लेकर वेरिफाइड प्रीमियम मिस्त्री तक, सब कुछ बुक करें एक क्लिक में।")}
-        </p>
-      </div>
+      ) : (
+        /* GUEST HERO BANNER */
+        <div className="hero-banner">
+          <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '6px 16px', borderRadius: '25px', fontSize: 'clamp(10px, 2vw, 12px)', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '15px', color: '#fbbf24', border: '1px solid rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>
+            🇮🇳 {t("India's No. 1 E-Commerce Sale & Service", "भारत का नं. 1 ई-कॉमर्स और सर्विस प्लेटफॉर्म")}
+          </div>
+          <br/>
+          <div className="brand-logo-card">
+            <div className="brand-text-logo">
+              <span style={{ color: '#0a192f' }}>F</span><span style={{ color: '#0a192f' }}>i</span>
+              <span style={{ color: '#fb641b', position: 'relative' }}>x<span style={{ position: 'absolute', top: '-10px', right: '-12px', fontSize: 'clamp(16px, 3vw, 24px)' }}>🛒</span></span>
+              <span style={{ color: '#0a192f' }}>i</span><span style={{ color: '#0a192f' }}>f</span><span style={{ color: '#0a192f' }}>i</span><span style={{ color: '#0a192f' }}>y</span>
+            </div>
+          </div>
+          <h1 style={{ fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 800, margin: '10px 0 8px 0', lineHeight: 1.3, color: '#f8fafc' }}>
+            {t("Everything You Need, All In One Place! ✨", "यहाँ मिलेगा सब कुछ, एक ही जगह! ✨")}
+          </h1>
+          <p style={{ fontSize: 'clamp(13px, 2.5vw, 15px)', opacity: 0.9, maxWidth: '700px', margin: '0 auto', color: '#cbd5e1', lineHeight: '1.5' }}>
+            {t("From A to Z Products to Verified Premium Mistris, experience the best of both worlds.", "A to Z प्रोडक्ट्स से लेकर वेरिफाइड प्रीमियम मिस्त्री तक, सब कुछ बुक करें एक क्लिक में।")}
+          </p>
+        </div>
+      )}
 
       {/* SEARCH BAR */}
-      <div style={{ maxWidth: '800px', margin: '-50px auto 40px auto', padding: '0 20px', position: 'relative', zIndex: 10 }}>
+      <div style={{ maxWidth: '800px', margin: '-30px auto 40px auto', padding: '0 20px', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', background: '#ffffff', borderRadius: '40px', padding: '12px 30px', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }}>
           <span style={{ fontSize: '22px', marginRight: '15px' }}>🔍</span>
           <input type="text" placeholder={t("Search from shop stock...", "शॉप स्टॉक से खोजें...")} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ background: 'transparent', border: 'none', width: '100%', outline: 'none', padding: '10px 0', fontSize: '16px', color: '#0f172a' }} />
@@ -308,9 +365,6 @@ export default function GuestHomePage() {
             <p style={{ fontSize: '14px', lineHeight: '1.7', marginBottom: '20px', color: '#94a3b8' }}>
               <strong>Fixifiy Technology</strong> (A unit of Mahadev Enterprises). India's No. 1 E-Commerce Sale & Service platform. Everything you need, all in one place!
             </p>
-            <div style={{ display: 'inline-block', background: 'rgba(251, 100, 27, 0.15)', border: '1px solid rgba(251, 100, 27, 0.4)', padding: '6px 12px', borderRadius: '6px', color: '#fb641b', fontSize: '12px', fontWeight: 'bold' }}>
-              Verified Enterprise Partner ✓
-            </div>
           </div>
 
           <div>
@@ -318,36 +372,25 @@ export default function GuestHomePage() {
               Quick Links
             </h4>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '14px', lineHeight: '2.4', color: '#94a3b8' }}>
-              <li style={{ cursor: 'pointer' }}>➔ About Fixifiy</li>
-              <li style={{ cursor: 'pointer' }}>➔ Privacy Policy</li>
-              <li style={{ cursor: 'pointer' }}>➔ Terms & Conditions</li>
-              <li style={{ cursor: 'pointer' }}>➔ Return & Refund Policy</li>
+              <li>➔ About Fixifiy</li>
+              <li>➔ Privacy Policy</li>
+              <li>➔ Terms & Conditions</li>
             </ul>
           </div>
 
           <div>
             <h4 style={{ color: 'white', fontSize: '18px', fontWeight: '800', margin: '0 0 20px 0', borderBottom: '3px solid #16a34a', paddingBottom: '8px', display: 'inline-block' }}>
-              Official Corporate Address
+              Official Address
             </h4>
             <div style={{ fontSize: '14px', lineHeight: '2', color: '#94a3b8' }}>
-              <div style={{ marginBottom: '8px' }}>
-                📍 <strong style={{ color: 'white' }}>Fixifiy (A unit of Mahadev Enterprises)</strong><br />
-                Plot No. 271, Narpa, Hasanpur Main Road,<br />
-                Samastipur, Bihar - 848208
-              </div>
-              <div style={{ marginBottom: '6px' }}>📞 <strong style={{ color: 'white' }}>Phone:</strong> 1800-XXX-XXXX, +91 9709740882</div>
-              <div>✉️ <strong style={{ color: 'white' }}>Email:</strong> support@fixifiy.com <br/> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fixifiyindia@gmail.com</div>
+              <div>📍 Fixifiy (A unit of Mahadev Enterprises), Samastipur, Bihar - 848208</div>
+              <div>📞 Phone: +91 9709740882</div>
             </div>
           </div>
         </div>
 
-        <div style={{ maxWidth: '1200px', margin: '40px auto 0 auto', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', fontSize: '13px', color: '#64748b' }}>
-          <div>© {new Date().getFullYear()} Fixifiy Services (A unit of Mahadev Enterprises). All Rights Reserved.</div>
-          <div style={{ display: 'flex', gap: '15px' }}>
-            <span>🔒 Secure SSL</span>
-            <span>⚡ Fast BBPS</span>
-            <span>🛡️ Verified Partners</span>
-          </div>
+        <div style={{ maxWidth: '1200px', margin: '40px auto 0 auto', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '25px', color: '#64748b', fontSize: '13px' }}>
+          © {new Date().getFullYear()} Fixifiy Services (A unit of Mahadev Enterprises). All Rights Reserved.
         </div>
       </footer>
     </div>
