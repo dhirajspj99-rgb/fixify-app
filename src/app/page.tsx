@@ -14,9 +14,6 @@ export default function GuestHomePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [mistriFilter, setMistriFilter] = useState<string>("All");
-  
-  // 🔥 Logged-in customer state
-  const [loggedInCustomer, setLoggedInCustomer] = useState<any>(null);
 
   const t = (enText: string, hiText: string) => lang === 'EN' ? enText : hiText;
 
@@ -54,22 +51,14 @@ export default function GuestHomePage() {
   };
 
   useEffect(() => {
-    // Check if customer is logged in from localStorage
-    const savedCustomer = localStorage.getItem('fixify_customer');
-    if (savedCustomer) {
-      try {
-        setLoggedInCustomer(JSON.parse(savedCustomer));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
     const fetchData = async () => {
       try {
         const { data: prodData } = await supabase.from('products').select('*').limit(5000).order('id', { ascending: false });
         const { data: labourData } = await supabase.from('labours').select('*').limit(200);
         
         if (prodData && prodData.length > 0) {
+          // 🔥 100% STRICT STOCK FILTER 🔥
+          // Sirf wahi products aayenge jinke paas Shop Owner ki ID hai (shop_id) AUR unka Stock 0 se zyada hai.
           const validProducts = prodData.filter(p => {
              const hasShopOwner = p.shop_id !== null && p.shop_id !== undefined && p.shop_id !== '';
              const stockNum = Number(p.stock);
@@ -90,6 +79,7 @@ export default function GuestHomePage() {
     fetchData();
   }, []);
 
+  // 🔥 CLICK KARNE PAR SEEDHA NAYA PAGE KHULEGA 🔥
   const handleViewItem = (item: any, isMistri: boolean = false) => {
     const type = isMistri ? 'mistri' : 'product';
     router.push(`/details?id=${item.id}&type=${type}`);
@@ -136,6 +126,8 @@ export default function GuestHomePage() {
 
   const sharedStyles = `
     .main-bg { background: #f8fafc; min-height: 100vh; font-family: system-ui, sans-serif; color: #0f172a; padding-bottom: 0px; }
+    
+    /* 🔥 HERO BANNER WAPAS LAA DIYA GAYA HAI 🔥 */
     .hero-banner { 
       background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); 
       color: white; padding: 40px 20px; text-align: center; 
@@ -152,10 +144,12 @@ export default function GuestHomePage() {
       font-family: 'Arial Black', Impact, sans-serif; letter-spacing: -1.5px; 
       line-height: 1; display: flex; align-items: center;
     }
+
     .feed-card { background: white; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; transition: all 0.3s ease; cursor: pointer; display: flex; flex-direction: column; height: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.03);}
     .feed-card:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0,0,0,0.1); border-color: #cbd5e1; }
     .hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .grid-container { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    
     .dept-pill { padding: 8px 18px; border-radius: 25px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: 0.3s; border: 1px solid #cbd5e1; background: white; color: #475569; }
     .dept-pill-active { background: #16a34a; color: white; border-color: #16a34a; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3); }
   `;
@@ -175,23 +169,13 @@ export default function GuestHomePage() {
           <div onClick={() => setLang(lang === 'EN' ? 'HI' : 'EN')} style={{ cursor: 'pointer', background: '#f1f5f9', padding: '8px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
             🌐 {lang === 'EN' ? 'English' : 'हिंदी'}
           </div>
-
-          {loggedInCustomer ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>👤 {loggedInCustomer.name}</span>
-              <button onClick={() => { localStorage.removeItem('fixify_customer'); setLoggedInCustomer(null); router.refresh(); }} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
-                {t('Logout', 'लॉग आउट')}
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => router.push('/login')} style={{ background: '#0f172a', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '30px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.15)' }}>
-              {t('Login / Signup', 'लॉगिन / साइनअप')}
-            </button>
-          )}
+          <button onClick={() => router.push('/login')} style={{ background: '#0f172a', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '30px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.15)' }}>
+            {t('Login / Signup', 'लॉगिन / साइनअप')}
+          </button>
         </div>
       </div>
 
-      {/* HERO BANNER */}
+      {/* 🔥 MAST WALA HERO BANNER WAPAS AAGAYA 🔥 */}
       <div className="hero-banner">
         <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '6px 16px', borderRadius: '25px', fontSize: 'clamp(10px, 2vw, 12px)', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '15px', color: '#fbbf24', border: '1px solid rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>
           🇮🇳 {t("India's No. 1 E-Commerce Sale & Service", "भारत का नं. 1 ई-कॉमर्स और सर्विस प्लेटफॉर्म")}
@@ -290,7 +274,7 @@ export default function GuestHomePage() {
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* 🔥 PREMIUM 3-COLUMN FOOTER WAPAS AAGAYA 🔥 */}
       <footer className="no-print" style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
         color: '#cbd5e1',
