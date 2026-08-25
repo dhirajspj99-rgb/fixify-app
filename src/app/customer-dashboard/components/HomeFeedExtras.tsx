@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo } from 'react';
 import HomeDashboard from './HomeDashboard';
-import { useAppContext } from './AppContext'; // 🔥 Yahan se aayega selectedLanguage
+import { useAppContext } from './AppContext'; 
 
 export default function HomeFeed({
   userProfile, userLocation, handleVipUpgrade, 
@@ -20,9 +20,6 @@ export default function HomeFeed({
       : `✅ Notification set for ${name}! \n\nJaise hi dukandaron ke paas iska stock aayega, aapko notification mil jayega.`,
     hello: isHindi ? "नमस्ते," : "Hello,",
     becomeVip: isHindi ? "👑 VIP बनें" : "👑 Become VIP",
-    mainBadge: isHindi ? "भारत का नंबर 1 ई-कॉमर्स" : "IN INDIA'S NO. 1 E-COMMERCE",
-    mainTitle: isHindi ? "आपकी हर ज़रूरत, एक ही जगह पर! ✨" : "Everything You Need, All In One Place! ✨",
-    mainSub: isHindi ? "A से Z प्रोडक्ट्स से लेकर वेरीफाइड प्रीमियम मिस्त्री तक।" : "From A to Z Products to Verified Premium Mistris.",
     searchPlaceholder: isHindi ? "प्रोडक्ट्स, मटेरियल, मिस्त्री सर्च करें..." : "Search products, materials, mistri...",
     outOfStock: isHindi ? "स्टॉक में नहीं" : "OUT OF STOCK",
     addBtn: isHindi ? "+ कार्ट में डालें" : "+ ADD",
@@ -36,10 +33,10 @@ export default function HomeFeed({
     perDay: isHindi ? "/ दिन" : "/ day",
     bookMistri: isHindi ? "मिस्त्री बुक करें" : "BOOK MISTRI",
     stockWord: isHindi ? "स्टॉक:" : "Stock:",
-    noProductFound: isHindi ? "ऊप्स! कोई प्रोडक्ट नहीं मिला।" : "Oops! Koi product nahi mila."
+    noProductFound: isHindi ? "ऊप्स! कोई प्रोडक्ट नहीं मिला।" : "Oops! Koi product nahi mila.",
+    shopByCategory: isHindi ? "कैटेगरी चुनें" : "Shop by Category" // 🔥 Naya Translation
   };
 
-  // 🔥 Category Translation Dictionary 🔥
   const catTranslation: Record<string, string> = {
     'Fashion & Design': 'फैशन और डिजाइन',
     'Cosmetic Items': 'कॉस्मेटिक आइटम',
@@ -97,7 +94,6 @@ export default function HomeFeed({
     'Furniture', 'Old Vehicles (Sell/Buy)', 'Cameras', 'Aluminium & Steel', 'UPVC Windows', 'General Store'
   ];
 
-  // 🔥 MERGE DUPLICATES & SUM TOTAL STOCK 🔥
   const aggregatedProducts = useMemo(() => {
     if (!displayProducts) return [];
     
@@ -127,7 +123,6 @@ export default function HomeFeed({
     return Object.values(mergedMap);
   }, [displayProducts]);
 
-  // 🔥 CATEGORY ROW LOGIC 🔥
   const categoryRows = useMemo(() => {
     const groups: Record<string, any[]> = {};
     
@@ -176,75 +171,9 @@ export default function HomeFeed({
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* 🔥 PREMIUM & COMPACT MAIN FIXIFIY BANNER CSS 🔥 */
-        .main-fixifiy-banner {
-          background: linear-gradient(135deg, #0b132b 0%, #172a53 100%);
-          padding: clamp(20px, 4vw, 30px) 15px; /* Height shrink */
-          text-align: center;
-          border-radius: 12px;
-          box-shadow: 0 8px 25px rgba(0,0,0,0.25);
-          position: relative;
-          overflow: hidden;
-        }
-        .main-badge {
-          display: inline-block;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          background: rgba(255, 255, 255, 0.05);
-          padding: 4px 12px;
-          border-radius: 20px;
-          color: #facc15;
-          font-size: clamp(9px, 2.5vw, 11px);
-          font-weight: 700;
-          letter-spacing: 0.5px;
-          margin-bottom: 15px;
-          text-transform: uppercase;
-          backdrop-filter: blur(4px);
-        }
-        .main-logo-card {
-          background: white;
-          display: inline-block;
-          padding: 8px 25px;
-          border-radius: 10px;
-          border-bottom: 4px solid #fb641b;
-          margin-bottom: 15px;
-          box-shadow: 0 6px 15px rgba(0,0,0,0.15);
-        }
-        .main-logo-text {
-          font-size: clamp(28px, 6vw, 36px); /* Auto-sizing font */
-          font-weight: 900;
-          font-style: italic;
-          font-family: "Arial Black", Impact, sans-serif;
-          color: #0a192f;
-          display: flex;
-          align-items: center;
-          line-height: 1;
-        }
-        .main-cart-emoji {
-          position: absolute;
-          top: -15px;
-          left: 50%;
-          transform: translateX(-50%);
-          font-size: clamp(14px, 3vw, 18px);
-        }
-        .main-hero-h1 {
-          color: white;
-          font-size: clamp(18px, 4.5vw, 24px); /* H1 size reduced */
-          font-weight: 800;
-          margin: 0 0 6px 0;
-          line-height: 1.2;
-        }
-        .main-hero-p {
-          color: #cbd5e1;
-          font-size: clamp(11px, 2.5vw, 13px); /* Paragraph reduced */
-          margin: 0 auto;
-          font-weight: 400;
-          line-height: 1.4;
-          max-width: 90%;
-        }
       `}</style>
 
-      {/* Top Header Card */}
+      {/* Top Header Card (Welcome Message) */}
       <div style={{ background: 'white', margin: '15px 20px', padding: '15px 20px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: userProfile.is_vip ? 'linear-gradient(135deg, #facc15, #f59e0b)' : '#e2e8f0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '20px', color: 'white', fontWeight: 'bold' }}>
@@ -265,29 +194,31 @@ export default function HomeFeed({
         )}
       </div>
 
-      {/* 🔥 FIXIFIY MAIN WELCOME HERO BANNER (COMPACT & AUTO-ADJUSTING) 🔥 */}
-      <div style={{ padding: '0 20px', marginBottom: '20px' }}>
-        <div className="main-fixifiy-banner">
-          <div className="main-badge">
-            <span style={{color: '#facc15'}}>IN</span> {t.mainBadge}
-          </div>
-          <br />
-          <div className="main-logo-card">
-            <div className="main-logo-text">
-              F<span style={{ color: '#0a192f' }}>i</span>
-              <span style={{ color: '#fb641b', position: 'relative' }}>
-                <span className="main-cart-emoji">🛒</span>x
+      {/* 🔥 NEW CATEGORY SELECTION SLIDER (Replaced Banner) 🔥 */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', marginBottom: '20px' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: '800', margin: '0 0 12px 0', color: '#1e293b' }}>
+          {t.shopByCategory}
+        </h3>
+        <div className="hide-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px' }}>
+          {homeCategories && homeCategories.map((cat: any, idx: number) => (
+            <div 
+              key={idx} 
+              onClick={() => handleCategoryClick(cat)}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '75px', cursor: 'pointer' }}
+            >
+              <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '26px', border: '1px solid #e2e8f0', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', marginBottom: '8px' }}>
+                {cat.icon || getCategoryIcon(cat.name)}
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textAlign: 'center', lineHeight: '1.2' }}>
+                {getTranslatedCategory(cat.name)}
               </span>
-              <span style={{ color: '#0a192f' }}>i</span>fiy
             </div>
-          </div>
-          <h1 className="main-hero-h1">{t.mainTitle}</h1>
-          <p className="main-hero-p">{t.mainSub}</p>
+          ))}
         </div>
       </div>
 
+      {/* SINGLE SEARCH BAR */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
-        {/* SINGLE SEARCH BAR */}
         <div style={{ marginBottom: '20px', position: 'relative', zIndex: 100 }}>
           <input 
             type="text" 

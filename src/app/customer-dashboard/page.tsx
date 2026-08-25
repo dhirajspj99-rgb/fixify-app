@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/supabase'; 
 import { useRouter } from 'next/navigation';
+// 🔥 1. Yahan Capacitor App Import kiya gaya hai 👇
+import { App as CapacitorApp } from '@capacitor/app';
 
 // Context & Components
 import { AppProvider, useAppContext } from './components/AppContext'; 
@@ -32,6 +34,32 @@ function MainCustomerScreen() {
   });
 
   const [appStep, setAppStep] = useState<string>('home'); 
+
+  // 🔥 2. ANDROID HARDWARE BACK BUTTON LOGIC 👇 🔥
+  useEffect(() => {
+    let backListener: any = null;
+
+    const setupBackButton = async () => {
+      backListener = await CapacitorApp.addListener('backButton', () => {
+        if (appStep !== 'home') {
+          // Agar user Home page par nahi hai, toh back dabane par Home par bhejo
+          setAppStep('home');
+        } else {
+          // Agar Home page par hi hai aur back dabaya, tabhi app band karo
+          CapacitorApp.exitApp();
+        }
+      });
+    };
+
+    setupBackButton();
+
+    return () => {
+      if (backListener) {
+        backListener.remove();
+      }
+    };
+  }, [appStep]);
+  // 🔥 BACK BUTTON LOGIC END 🔥
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -172,7 +200,6 @@ function MainCustomerScreen() {
         setFeaturedMistris(premiumLabours.length > 0 ? premiumLabours : [{ id: 1, name: 'Raju Rajmistri', labour_type: 'Rajmistri (Mason)', base_rate: 750, rating: 4.8, exp: '8 Yrs Exp', phone: '000' }]);
       }
 
-      // 🔥 YAHAN MAIN PROBLEM THI: LOCALSTORAGE SE DATA UTHAYA GAYA HAI 🔥
       let phoneNo = '';
       const savedLocalCustomer = localStorage.getItem('fixifiy_customer');
       if (savedLocalCustomer) {
@@ -279,7 +306,7 @@ function MainCustomerScreen() {
                 district: userProfile.district || '',
                 block: userProfile.block || '',
                 pincode: userProfile.pincode || '', 
-                items: selectedItems, // 🔥 Items mein automatically is_cod_available & return_policy chala jayega (jo handleConfirmAddToCart me add hua hai)
+                items: selectedItems, 
                 total_amount: finalAmount,
                 delivery_charge: deliveryCharge || 0,
                 payment_mode: mode,
@@ -662,7 +689,6 @@ function MainCustomerScreen() {
 
   const toggleCartItemSelection = (id: number) => { setMainCart(mainCart.map(item => item.id === id ? { ...item, selected: !item.selected } : item)); };
 
-  // 🔥 IMPORTANT: YAHAN RETURN POLICY PASS HO RAHI HAI 🔥
   const handleConfirmAddToCart = () => { 
     const qty = Number(buyValue); if (!qty || qty <= 0) return alert('Kripya sahi Quantity daalein!');
     const availableStock = cartModalItem.stock || cartModalItem.total_stock || 999; 
@@ -688,7 +714,7 @@ function MainCustomerScreen() {
         ratePerUnit: cartModalItem.price, 
         quantity: qty, 
         is_cod_available: cartModalItem.is_cod_available, 
-        return_policy: cartModalItem.return_policy || 'No Return', // 👈 SAVE HUA!
+        return_policy: cartModalItem.return_policy || 'No Return', 
         selected: true 
     }]);
     setCartModalItem(null); setBuyValue(''); alert('Item Cart mein add ho gaya hai!'); setAppStep('cart_checkout'); 
