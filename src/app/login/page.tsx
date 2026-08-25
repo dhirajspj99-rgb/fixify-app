@@ -68,16 +68,19 @@ function LoginContent() {
   const [newPassword, setNewPassword] = useState('');
 
   useEffect(() => {
-    if (window.recaptchaVerifier) {
-       window.recaptchaVerifier.clear();
-       window.recaptchaVerifier = undefined;
-    }
+    if (typeof window === 'undefined') return;
+
     try {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible",
-        callback: (response: any) => {},
-      });
-      window.recaptchaVerifier.render();
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+          size: "invisible",
+          callback: (response: any) => {},
+          'expired-callback': () => {}
+        });
+        window.recaptchaVerifier.render().catch((err) => {
+          console.log("Recaptcha render error:", err);
+        });
+      }
     } catch (err) {
       console.log("Recaptcha Init Error: ", err);
     }
