@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/supabase'; 
 import { useRouter } from 'next/navigation';
-// 🔥 1. Yahan Capacitor App Import kiya gaya hai 👇
 import { App as CapacitorApp } from '@capacitor/app';
 
 // Context & Components
@@ -35,31 +34,21 @@ function MainCustomerScreen() {
 
   const [appStep, setAppStep] = useState<string>('home'); 
 
-  // 🔥 2. ANDROID HARDWARE BACK BUTTON LOGIC 👇 🔥
+  // 🔥 ANDROID HARDWARE BACK BUTTON LOGIC
   useEffect(() => {
     let backListener: any = null;
-
     const setupBackButton = async () => {
       backListener = await CapacitorApp.addListener('backButton', () => {
         if (appStep !== 'home') {
-          // Agar user Home page par nahi hai, toh back dabane par Home par bhejo
           setAppStep('home');
         } else {
-          // Agar Home page par hi hai aur back dabaya, tabhi app band karo
           CapacitorApp.exitApp();
         }
       });
     };
-
     setupBackButton();
-
-    return () => {
-      if (backListener) {
-        backListener.remove();
-      }
-    };
+    return () => { if (backListener) backListener.remove(); };
   }, [appStep]);
-  // 🔥 BACK BUTTON LOGIC END 🔥
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -200,25 +189,43 @@ function MainCustomerScreen() {
         setFeaturedMistris(premiumLabours.length > 0 ? premiumLabours : [{ id: 1, name: 'Raju Rajmistri', labour_type: 'Rajmistri (Mason)', base_rate: 750, rating: 4.8, exp: '8 Yrs Exp', phone: '000' }]);
       }
 
+      // 🔥 FIX: Direct read from 'fixifiy_customer' LocalStorage
       let phoneNo = '';
+      let cachedCustomer = null;
       const savedLocalCustomer = localStorage.getItem('fixifiy_customer');
       if (savedLocalCustomer) {
          try {
-             phoneNo = JSON.parse(savedLocalCustomer).phone;
+             cachedCustomer = JSON.parse(savedLocalCustomer);
+             phoneNo = cachedCustomer.phone;
          } catch(e) {}
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!phoneNo && session) {
-        phoneNo = session.user.email?.replace('@fixifiy.com', '').replace('@fixifiy.in', '') || ''; 
+      if (cachedCustomer) {
+        setAuthUser(cachedCustomer); 
+        setWalletBalance(Number(cachedCustomer.balance) || 0);
+        setUserProfile({ 
+           id: cachedCustomer.id, 
+           name: cachedCustomer.name || '', 
+           phone: cachedCustomer.phone || '', 
+           address: cachedCustomer.address || '', 
+           state: cachedCustomer.state || '', 
+           district: cachedCustomer.district || '', 
+           block: cachedCustomer.block || '', 
+           pincode: cachedCustomer.pincode || '', 
+           saved_addresses: cachedCustomer.saved_addresses || [], 
+           is_vip: cachedCustomer.is_vip || false, 
+           upi_id: cachedCustomer.upi_id || '', 
+           balance: cachedCustomer.balance || 0 
+        });
+        setCheckoutAddress(cachedCustomer.address || '');
       }
 
       if (phoneNo) {
+        // Fresh fetch from Supabase to keep balance & data updated
         const { data: custData } = await supabase.from('customers').select('*').eq('phone', phoneNo);
         if (custData && custData.length > 0) {
           setAuthUser(custData[0]); 
           setWalletBalance(Number(custData[0].balance) || 0);
-          
           setUserProfile({ 
              id: custData[0].id, 
              name: custData[0].name || '', 
@@ -234,7 +241,7 @@ function MainCustomerScreen() {
              balance: custData[0].balance || 0 
           });
           setCheckoutAddress(custData[0].address || '');
-          localStorage.setItem('fixifiy_customer', JSON.stringify(custData[0])); // Hamesha local storage sync rakho
+          localStorage.setItem('fixifiy_customer', JSON.stringify(custData[0]));
         }
         await fetchPastOrders(phoneNo);
       }
@@ -273,7 +280,6 @@ function MainCustomerScreen() {
       handleDeliveryGpsTrace();
     }
   }, [appStep, mainCart]);
-
 
   const handleVipUpgrade = () => {
     const adminUpi = appSettings.shoppingUpi || 'admin@upi';
@@ -334,13 +340,13 @@ function MainCustomerScreen() {
             const finalAmount = savedDraftOrder.charge + transport;
 
             const labourPayload = {
-                id: customOrderId,       
+                id: customOrderId,      
                 order_no: customOrderId, 
                 customer_name: userProfile.name || 'Customer',
                 phone: userProfile.phone,
                 address: finalAddress || 'Location not provided',
                 state: savedDraftOrder.state || userProfile.state || '',  
-                district: userProfile.district || '',                    
+                district: userProfile.district || '',                     
                 block: userProfile.block || '',                          
                 pincode: userProfile.pincode || '', 
                 labour_type: savedDraftOrder.labour_type,
@@ -355,7 +361,6 @@ function MainCustomerScreen() {
             const { error: labourError } = await supabase.from('labour_bookings').insert([labourPayload]);
             
             if (labourError) {
-                console.error("Labour Bookings table Error:", labourError);
                 const fallbackPayload = {
                     id: customOrderId,
                     customer_name: userProfile.name || 'Customer',
@@ -461,13 +466,13 @@ function MainCustomerScreen() {
               const finalAmount = savedDraftOrder.charge + transport;
 
               const labourPayload = {
-                  id: customOrderId,       
+                  id: customOrderId,      
                   order_no: customOrderId, 
                   customer_name: userProfile.name || 'Customer',
                   phone: userProfile.phone,
                   address: finalAddress || 'Location not provided',
                   state: savedDraftOrder.state || userProfile.state || '', 
-                  district: userProfile.district || '',                    
+                  district: userProfile.district || '',                     
                   block: userProfile.block || '',                          
                   pincode: userProfile.pincode || '', 
                   labour_type: savedDraftOrder.labour_type,
@@ -488,7 +493,7 @@ function MainCustomerScreen() {
                       phone: userProfile.phone,
                       address: finalAddress || 'Location not provided',
                       state: savedDraftOrder.state || userProfile.state || '', 
-                      district: userProfile.district || '',                    
+                      district: userProfile.district || '',                     
                       block: userProfile.block || '',                          
                       pincode: userProfile.pincode || '', 
                       items: [{ name: savedDraftOrder.labour_type, price: savedDraftOrder.charge, quantity: 1, unit: 'Booking' }], 
@@ -521,11 +526,9 @@ function MainCustomerScreen() {
 
   const resumeDraft = (draft: any) => {
       if (!draft) return;
-      
       if (draft.type === 'Labour Booking') {
           const charge = draft.items && draft.items[0] ? draft.items[0].price : draft.charge || draft.totalAmount;
           const labourType = draft.items && draft.items[0] ? draft.items[0].name : draft.labour_type || 'Mistri Booking';
-          
           setSavedDraftOrder({
               labour_type: labourType,
               charge: charge,
@@ -545,7 +548,6 @@ function MainCustomerScreen() {
 
   const handleDeleteOrder = async (orderId: string, orderType: string) => {
       if (!orderId) return;
-
       const confirmCancel = window.confirm(`Kya aap sach mein is ${orderType} ko CANCEL karna chahte hain?`);
       if (!confirmCancel) return;
 
@@ -553,8 +555,7 @@ function MainCustomerScreen() {
           let tableName = orderType === 'Labour Booking' ? 'labour_bookings' : 'orders';
           let columnToMatch = orderType === 'Labour Booking' ? 'order_no' : 'id';
           
-          let { data: orderData, error: fetchErr } = await supabase.from(tableName).select('*').eq(columnToMatch, orderId).single();
-          
+          let { data: orderData } = await supabase.from(tableName).select('*').eq(columnToMatch, orderId).single();
           if (!orderData && orderType === 'Labour Booking') {
               const { data: fallbackData } = await supabase.from('orders').select('*').eq('id', orderId).single();
               if (fallbackData) {
@@ -608,14 +609,12 @@ function MainCustomerScreen() {
 
   const handleDeliveryGpsTrace = async () => {
     setIsGpsLoading(true);
-    
     try {
       const calculatedDistance = distanceKm > 0 ? distanceKm : (Math.floor(Math.random() * 20) + 2); 
       setDistanceKm(calculatedDistance);
 
       const ratePerKm = Number(appSettings?.deliveryChargePerKm || 15);
       const ratePerKg = Number(appSettings?.deliveryChargePerKg || 2);
-
       const selectedCartItems = mainCart.filter(i => i.selected);
       
       let ironWeight = 0;
@@ -624,11 +623,9 @@ function MainCustomerScreen() {
       selectedCartItems.forEach(item => {
           const cat = String(item.category || '').toLowerCase();
           const name = String(item.name || '').toLowerCase();
-          
           if (cat.includes('cement') || name.includes('cement')) {
               cementBags += Number(item.quantity || 1);
-          } 
-          else if (
+          } else if (
             cat.includes('iron') || cat.includes('loha') || cat.includes('steel') || cat.includes('tmt') || cat.includes('hardware') ||
             name.includes('iron') || name.includes('loha') || name.includes('steel') || name.includes('tmt') || item.is_heavy
           ) {
@@ -644,7 +641,6 @@ function MainCustomerScreen() {
       setIsGpsLoading(false);
     } catch(e) {
        setIsGpsLoading(false);
-       console.error("GPS Calculate error", e);
     }
   };
 
@@ -658,7 +654,6 @@ function MainCustomerScreen() {
         state: selectedState,
         chat_history: chatHistoryData
     });
-    
     setAppStep('labour_checkout');
   };
 
@@ -666,11 +661,10 @@ function MainCustomerScreen() {
     setSelectedCategory(cat.name); setAppStep('shop_items'); setSearchTerm(''); 
   };
   
-  const getAutoImagesArray = (cat: string) => { return []; };
   const getImagesArray = (item: any) => {
     if (!item) return [];
     if (item.isMistri) return item.avatar ? [item.avatar] : ['https://placehold.co/400x300?text=No+Image'];
-    if (!item.image_url || item.image_url.trim() === '') return getAutoImagesArray(item.category);
+    if (!item.image_url || item.image_url.trim() === '') return [];
     return item.image_url.split(',');
   };
 
@@ -739,7 +733,7 @@ function MainCustomerScreen() {
 
   const estDeliveryTimeForCart = distanceKm > 0 ? (distanceKm <= 30 ? "Within 24 Hours 🚀" : "2-3 Days 🚚") : "2-4 Days 📦";
 
-  if (isCheckingAuth) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#2874f0', color: 'white' }}><h2>Loading...</h2></div>;
+  if (isCheckingAuth) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#0f172a', color: '#38bdf8' }}><h2>Loading Customer Portal...</h2></div>;
 
   const sharedStyles = `
     .main-bg { background: #f8fafc; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; color: #0f172a; padding-bottom: 50px; }
