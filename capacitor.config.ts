@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'in.fixify.app',
-  appName: 'fixify',
+  appId: 'in.fixifiy.shop',
+  appName: 'Fixifiy Shop',
   webDir: 'out'
 };
 

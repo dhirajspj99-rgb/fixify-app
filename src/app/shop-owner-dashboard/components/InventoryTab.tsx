@@ -15,8 +15,12 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
   const [condition, setCondition] = useState('New'); 
   const [isHeavy, setIsHeavy] = useState(false); 
   const [returnPolicy, setReturnPolicy] = useState('No Return'); 
-  const [isCodAvailable, setIsCodAvailable] = useState(true); // 🔥 NEW STATE FOR COD 🔥
+  const [isCodAvailable, setIsCodAvailable] = useState(true); 
   
+  // 🔥 NEW STATES FOR MULTIPLE SIZES/VARIANTS 🔥
+  const [hasVariants, setHasVariants] = useState(false);
+  const [variants, setVariants] = useState([{ name: '', price: '', stock: '' }]);
+
   const [imageFiles, setImageFiles] = useState<File[]>([]); 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -33,13 +37,12 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
       else if (category !== 'Custom') setIsHeavy(false);
 
       const catLower = category.toLowerCase();
-      // 🔥 IRON/STEEL -> Kg, CEMENT -> Bag 🔥
       if (catLower.includes('iron') || catLower.includes('steel')) {
          setUnit('Kg');
       } else if (catLower.includes('cement')) {
          setUnit('Bag');
       } else {
-         setUnit('Pc'); // Baki sabke liye default Pc
+         setUnit('Pc'); 
       }
   }, [category]);
 
@@ -105,8 +108,10 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
 
   const addProduct = async () => {
     const finalCategory = category === 'Custom' ? newCustomCategory.trim() : category;
-    if (!name || !price || !stock || !finalCategory) return alert("Kripya sabhi details bharein!");
     
+    if (!hasVariants && (!name || !price || !stock || !finalCategory)) return alert("Kripya sabhi details bharein!");
+    if (hasVariants && !name) return alert("Product ka naam likhein!");
+
     setIsUploading(true);
     let finalImageUrlString = "";
 
@@ -123,20 +128,38 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
 
     const finalName = condition === 'Used' ? `${name} (Used)` : name;
     
-    // 🔥 Force Unit depending on category 🔥
     let finalUnit = unit;
     if (finalCategory.toLowerCase().includes('iron') || finalCategory.toLowerCase().includes('steel')) finalUnit = 'Kg';
     else if (finalCategory.toLowerCase().includes('cement')) finalUnit = 'Bag';
 
+    let finalPrice = Number(price);
+    let finalStock = Number(stock);
+    let finalVariantsJSON = null;
+
+    if (hasVariants) {
+      const validVariants = variants.filter(v => v.name && v.price && v.stock);
+      if (validVariants.length === 0) {
+        setIsUploading(false);
+        return alert("Kripya kam se kam ek Size/Variant theek se bharein!");
+      }
+      
+      finalStock = validVariants.reduce((sum, v) => sum + Number(v.stock), 0);
+      finalPrice = Math.min(...validVariants.map(v => Number(v.price)));
+      finalVariantsJSON = validVariants; 
+    }
+
     const { error } = await supabase.from('products').insert([{ 
       shop_id: safeShopId || null, 
-      name: finalName, category: finalCategory, price: Number(price), 
-      total_stock: Number(stock), sold_quantity: 0, 
+      name: finalName, category: finalCategory, 
+      price: finalPrice, 
+      total_stock: finalStock, 
+      sold_quantity: 0, 
       unit: finalUnit, 
       image_url: finalImageUrlString,
       is_heavy: isHeavy,
       return_policy: returnPolicy,
-      is_cod_available: isCodAvailable // 🔥 SAVING COD STATUS 🔥
+      is_cod_available: isCodAvailable,
+      variants: finalVariantsJSON 
     }]);
 
     if (error) alert("Error adding product: " + error.message);
@@ -145,11 +168,12 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
     setName(''); setPrice(''); setStock(''); setUnit('Pc'); 
     setReturnPolicy('No Return'); setIsCodAvailable(true);
     setCondition('New'); setNewCustomCategory(''); setImageFiles([]); setIsHeavy(false);
+    setHasVariants(false); setVariants([{ name: '', price: '', stock: '' }]);
   };
 
   const saveEditedProduct = async () => {
     const finalEditCategory = editProduct.category === 'Custom' ? editProduct.new_custom_category?.trim() : editProduct.category;
-    if (!editProduct.name || !editProduct.price || editProduct.total_stock === '' || !finalEditCategory) return alert("Details khali nahi chhod sakte!");
+    if (!editProduct.name || !finalEditCategory) return alert("Naam aur category zaroori hai!");
     
     setIsUploading(true);
     let finalImageUrlString = editProduct.image_url;
@@ -166,25 +190,33 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
     }
 
     const exactShopId = currentShop?.id ? Number(currentShop.id) : null;
-    
-    // 🔥 EDIT MEIN BHI STRICT CHECKING 🔥
     let finalUnit = editProduct.unit || 'Pc';
     if (finalEditCategory.toLowerCase().includes('iron') || finalEditCategory.toLowerCase().includes('steel')) finalUnit = 'Kg';
     else if (finalEditCategory.toLowerCase().includes('cement')) finalUnit = 'Bag';
 
     const finalReturnPolicy = editProduct.return_policy || 'No Return';
-    const finalCodStatus = editProduct.is_cod_available !== false; // defaults to true if null
+    const finalCodStatus = editProduct.is_cod_available !== false; 
+
+    let finalPrice = Number(editProduct.price);
+    let finalStock = Number(editProduct.total_stock);
+    let finalVariantsJSON = null;
+
+    if (editProduct.hasVariants) {
+      const validVariants = (editProduct.variants || []).filter((v:any) => v.name && v.price && v.stock);
+      if (validVariants.length > 0) {
+        finalStock = validVariants.reduce((sum: number, v:any) => sum + Number(v.stock), 0);
+        finalPrice = Math.min(...validVariants.map((v:any) => Number(v.price)));
+        finalVariantsJSON = validVariants;
+      }
+    }
 
     if (!editProduct.shop_id) {
        const { error: masterError } = await supabase.from('products').update({ 
-         name: editProduct.name, 
-         category: finalEditCategory, 
-         price: Number(editProduct.price), 
+         name: editProduct.name, category: finalEditCategory, 
+         price: finalPrice, 
          image_url: finalImageUrlString,
-         unit: finalUnit, 
-         is_heavy: editProduct.is_heavy,
-         return_policy: finalReturnPolicy,
-         is_cod_available: finalCodStatus // 🔥 UPDATE COD STATUS 🔥
+         unit: finalUnit, is_heavy: editProduct.is_heavy, return_policy: finalReturnPolicy,
+         is_cod_available: finalCodStatus, variants: finalVariantsJSON
        }).eq('id', editProduct.id);
 
        if (masterError) {
@@ -192,39 +224,28 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
          setIsUploading(false); return;
        }
 
-       const stockToAdd = Number(editProduct.total_stock);
-       if(stockToAdd > 0) {
+       if(finalStock > 0) {
            const { error: shopError } = await supabase.from('products').insert([{ 
              shop_id: exactShopId,  
-             name: editProduct.name, 
-             category: finalEditCategory, 
-             price: Number(editProduct.price), 
-             total_stock: stockToAdd, 
-             sold_quantity: 0, 
-             unit: finalUnit, 
-             image_url: finalImageUrlString,
-             is_heavy: editProduct.is_heavy,
-             return_policy: finalReturnPolicy,
-             is_cod_available: finalCodStatus // 🔥 ADD STOCK COD STATUS 🔥
+             name: editProduct.name, category: finalEditCategory, 
+             price: finalPrice, total_stock: finalStock, sold_quantity: 0, 
+             unit: finalUnit, image_url: finalImageUrlString,
+             is_heavy: editProduct.is_heavy, return_policy: finalReturnPolicy,
+             is_cod_available: finalCodStatus, variants: finalVariantsJSON
            }]);
-
-           if (shopError) alert("Stock save karne mein error: " + shopError.message);
+           if (shopError) alert("Stock save error: " + shopError.message);
            else alert("✅ Product aapke Stock Room me Add ho gaya!");
        } else {
-           alert("✅ Master product update ho gaya! (Aapne stock 0 dala tha isliye aapke stock room me nahi gaya)");
+           alert("✅ Master update! (Stock 0 hone se aapke room mein nahi aaya)");
        }
 
     } else {
        const { error } = await supabase.from('products').update({ 
-         name: editProduct.name, 
-         category: finalEditCategory, 
-         total_stock: Number(editProduct.total_stock), 
-         price: Number(editProduct.price), 
-         unit: finalUnit, 
-         image_url: finalImageUrlString,
-         is_heavy: editProduct.is_heavy,
-         return_policy: finalReturnPolicy,
-         is_cod_available: finalCodStatus // 🔥 UPDATE SHOP STOCK COD STATUS 🔥
+         name: editProduct.name, category: finalEditCategory, 
+         price: finalPrice, total_stock: finalStock, 
+         unit: finalUnit, image_url: finalImageUrlString,
+         is_heavy: editProduct.is_heavy, return_policy: finalReturnPolicy,
+         is_cod_available: finalCodStatus, variants: finalVariantsJSON
        }).eq('id', editProduct.id);
        
        if (error) alert("Error updating product: " + error.message);
@@ -234,10 +255,7 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
     setIsUploading(false); 
     setEditProduct(null); 
     setEditImageFiles([]); 
-    
-    if (typeof fetchProducts === 'function') {
-        await fetchProducts(); 
-    }
+    if (typeof fetchProducts === 'function') await fetchProducts(); 
   };
 
   const deleteProduct = async (id: number) => {
@@ -246,6 +264,7 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
     fetchProducts();
   };
 
+  // 🔥 FULL FUNCTION RESTORED 🔥
   const deleteHeavyItems = async () => {
     if (!window.confirm("🚨 WARNING: Kya aap sach mein sabhi HEAVY ITEMS ko database se delete karna chahte hain?")) return;
 
@@ -267,6 +286,7 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
     }
   };
 
+  // 🔥 FULL FUNCTION RESTORED 🔥
   const generateBulkDemoProducts = async () => {
     const targetCategory = selectedInvCategory === 'All Categories' ? 'General Store' : selectedInvCategory;
     if (!window.confirm(`Kya aap ${targetCategory} category mein demo items generate karna chahte hain?`)) return;
@@ -339,13 +359,15 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
          ))}
       </div>
 
+      {/* 🔥 ADD PRODUCT FORM 🔥 */}
       {isAdding && (
         <div style={{marginTop:'15px', border:'1px solid #38bdf8', padding:'20px', borderRadius:'12px', backgroundColor: '#0f172a', marginBottom: '20px'}}>
           <h3 style={{ color: '#38bdf8', marginTop: 0 }}>📦 Add Inventory Item</h3>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <input placeholder="Product Name" onChange={e => setName(e.target.value)} value={name} style={{...inputStyle, flex: 2, minWidth: '200px'}} />
-            <select onChange={e => setCondition(e.target.value)} value={condition} style={{...inputStyle, flex: 1, minWidth: '150px'}}><option value="New">✨ Brand New</option><option value="Used">♻️ Second Hand (Used)</option></select>
+            <input placeholder="Product Name (E.g. Kurti, Iron Pipe)" onChange={e => setName(e.target.value)} value={name} style={{...inputStyle, flex: 2, minWidth: '200px'}} />
+            <select onChange={e => setCondition(e.target.value)} value={condition} style={{...inputStyle, flex: 1, minWidth: '150px'}}><option value="New">✨ Brand New</option><option value="Used">♻️ Second Hand</option></select>
           </div>
+          
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select onChange={e => setCategory(e.target.value)} value={category} style={{...inputStyle, flex: 1, minWidth: '200px'}}>
               {dropdownCategories.map(c => <option key={c as string} value={c as string}>{c as string}</option>)}
@@ -354,34 +376,52 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
             {category === 'Custom' && <input placeholder="Enter new category name..." value={newCustomCategory} onChange={e => setNewCustomCategory(e.target.value)} style={{...inputStyle, flex: 1, border: '1px solid #10b981', minWidth: '200px'}} />}
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <input type="number" placeholder="Price (₹)" onChange={e => setPrice(e.target.value)} value={price} style={{...inputStyle, flex: 1, minWidth: '120px'}} />
-            
-            {/* 🔥 IRON OR CEMENT FORCED UNIT LOGIC 🔥 */}
-            {(category.toLowerCase().includes('iron') || category.toLowerCase().includes('steel')) ? (
-              <div style={{...inputStyle, flex: 1, minWidth: '80px', display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>
-                Kg
-              </div>
-            ) : category.toLowerCase().includes('cement') ? (
-              <div style={{...inputStyle, flex: 1, minWidth: '80px', display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>
-                Bag
-              </div>
-            ) : (
-              <select onChange={e => setUnit(e.target.value)} value={unit} style={{...inputStyle, flex: 1, minWidth: '80px'}}>
-                <option value="Pc">Pc</option>
-                <option value="Bag">Bag</option>
-                <option value="Box">Box</option>
-                <option value="Mtr">Mtr</option>
-                <option value="Ltr">Ltr</option>
-                <option value="Kg">Kg</option>
-              </select>
-            )}
-            
-            <input type="number" placeholder="Stock Qty" onChange={e => setStock(e.target.value)} value={stock} style={{...inputStyle, flex: 1, minWidth: '120px'}} />
+          {/* 🔥 MULTIPLE SIZES TOGGLE 🔥 */}
+          <div style={{ marginTop: '15px', marginBottom: '10px', padding: '12px', backgroundColor: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#38bdf8', fontWeight: 'bold', cursor: 'pointer' }}>
+              <input type="checkbox" checked={hasVariants} onChange={(e) => setHasVariants(e.target.checked)} style={{ transform: 'scale(1.3)', accentColor: '#38bdf8' }} />
+              👕 Is Product ke Alag-Alag Sizes/Variants hain? (e.g. M, L, XL)
+            </label>
           </div>
 
+          {hasVariants ? (
+            <div style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '8px', border: '1px dashed #38bdf8' }}>
+              <h4 style={{ color: '#e2e8f0', marginTop: 0 }}>Define Sizes & Prices</h4>
+              {variants.map((v, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                  <input placeholder="Size (XL, 32, 10mm)" value={v.name} onChange={(e) => { const newV = [...variants]; newV[i].name = e.target.value; setVariants(newV); }} style={{...inputStyle, flex: 2, margin: 0}} />
+                  <input type="number" placeholder="Price (₹)" value={v.price} onChange={(e) => { const newV = [...variants]; newV[i].price = e.target.value; setVariants(newV); }} style={{...inputStyle, flex: 1, margin: 0}} />
+                  <input type="number" placeholder="Stock" value={v.stock} onChange={(e) => { const newV = [...variants]; newV[i].stock = e.target.value; setVariants(newV); }} style={{...inputStyle, flex: 1, margin: 0}} />
+                  <button onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', cursor: 'pointer' }}>✖</button>
+                </div>
+              ))}
+              <button onClick={() => setVariants([...variants, { name: '', price: '', stock: '' }])} style={{ backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', padding: '8px 15px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '5px' }}>+ Add More Size</button>
+              <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '10px' }}>* Total stock apne aap calculate ho jayega.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input type="number" placeholder="Single Price (₹)" onChange={e => setPrice(e.target.value)} value={price} style={{...inputStyle, flex: 1, minWidth: '120px'}} />
+              
+              {(category.toLowerCase().includes('iron') || category.toLowerCase().includes('steel')) ? (
+                <div style={{...inputStyle, flex: 1, minWidth: '80px', display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>Kg</div>
+              ) : category.toLowerCase().includes('cement') ? (
+                <div style={{...inputStyle, flex: 1, minWidth: '80px', display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>Bag</div>
+              ) : (
+                <select onChange={e => setUnit(e.target.value)} value={unit} style={{...inputStyle, flex: 1, minWidth: '80px'}}>
+                  <option value="Pc">Pc</option>
+                  <option value="Bag">Bag</option>
+                  <option value="Box">Box</option>
+                  <option value="Mtr">Mtr</option>
+                  <option value="Ltr">Ltr</option>
+                  <option value="Kg">Kg</option>
+                </select>
+              )}
+
+              <input type="number" placeholder="Total Stock Qty" onChange={e => setStock(e.target.value)} value={stock} style={{...inputStyle, flex: 1, minWidth: '120px'}} />
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
-             {/* Return Policy */}
              <div style={{ flex: 1, minWidth: '180px' }}>
                <label style={{color: '#94a3b8', fontSize: '12px', fontWeight: 'bold'}}>Return Policy</label>
                <select onChange={e => setReturnPolicy(e.target.value)} value={returnPolicy} style={{...inputStyle, border: '1px solid #3b82f6'}}>
@@ -390,28 +430,24 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
                  <option value="7 Days Return">📅 7 Days Return</option>
                </select>
              </div>
-
-             {/* 🔥 NEW COD SELECTION OPTION 🔥 */}
              <div style={{ flex: 2, minWidth: '220px' }}>
                 <label style={{color: '#94a3b8', fontSize: '12px', fontWeight: 'bold'}}>Payment Mode</label>
                 <div style={{ display: 'flex', gap: '15px', marginTop: '10px', backgroundColor: '#1e293b', padding: '12px', borderRadius: '6px', border: '1px solid #334155' }}>
                   <label style={{ cursor: 'pointer', color: isCodAvailable ? '#10b981' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
-                    <input type="radio" checked={isCodAvailable} onChange={() => setIsCodAvailable(true)} style={{accentColor: '#10b981'}} />
-                    💵 COD (Cash on Delivery)
+                    <input type="radio" checked={isCodAvailable} onChange={() => setIsCodAvailable(true)} style={{accentColor: '#10b981'}} /> 💵 COD 
                   </label>
                   <label style={{ cursor: 'pointer', color: !isCodAvailable ? '#38bdf8' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
-                    <input type="radio" checked={!isCodAvailable} onChange={() => setIsCodAvailable(false)} style={{accentColor: '#38bdf8'}} />
-                    💳 Online Only
+                    <input type="radio" checked={!isCodAvailable} onChange={() => setIsCodAvailable(false)} style={{accentColor: '#38bdf8'}} /> 💳 Online Only
                   </label>
                 </div>
              </div>
           </div>
 
           <div style={{ marginTop: '10px', padding: '10px', backgroundColor: isHeavy ? 'rgba(245, 158, 11, 0.1)' : '#1e293b', border: `1px solid ${isHeavy ? '#f59e0b' : '#334155'}`, borderRadius: '6px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: isHeavy ? '#fbbf24' : '#cbd5e1', fontWeight: 'bold' }}>
-              <input type="checkbox" checked={isHeavy} onChange={(e) => setIsHeavy(e.target.checked)} style={{ transform: 'scale(1.3)', accentColor: '#f59e0b' }} />
-              🚛 High Weight / Heavy Item
-            </label>
+             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: isHeavy ? '#fbbf24' : '#cbd5e1', fontWeight: 'bold' }}>
+               <input type="checkbox" checked={isHeavy} onChange={(e) => setIsHeavy(e.target.checked)} style={{ transform: 'scale(1.3)', accentColor: '#f59e0b' }} />
+               🚛 High Weight / Heavy Item
+             </label>
           </div>
 
           <div style={{ marginTop: '15px', border: '2px dashed #38bdf8', padding: '15px', borderRadius: '8px', textAlign: 'center', backgroundColor: '#1e293b' }}>
@@ -435,8 +471,8 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
                </div>
              )}
           </div>
-          
-          <button onClick={addProduct} disabled={isUploading} style={{...greenBtn, width: '100%', marginTop: '15px', opacity: isUploading ? 0.5 : 1}}>
+
+          <button onClick={addProduct} disabled={isUploading} style={{...greenBtn, width: '100%', marginTop: '20px', opacity: isUploading ? 0.5 : 1}}>
             {isUploading ? '⏳ Uploading...' : '💾 Save Product'}
           </button>
         </div>
@@ -445,9 +481,9 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
       {/* 🔥 EDIT/ADD STOCK POPUP 🔥 */}
       {editProduct && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ backgroundColor: '#0f172a', padding: '25px', borderRadius: '12px', width: '100%', maxWidth: '420px', border: '1px solid #38bdf8', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ backgroundColor: '#0f172a', padding: '25px', borderRadius: '12px', width: '100%', maxWidth: '450px', border: '1px solid #38bdf8', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ color: '#10b981', marginTop: 0, borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
-              {editProduct.shop_id ? '✏️ Edit My Stock' : '📥 Edit Master & Add to My Stock'}
+              {editProduct.shop_id ? '✏️ Edit Stock / Sizes' : '📥 Edit Master & Add'}
             </h3>
             
             <label style={{color: '#94a3b8', fontSize: '12px'}}>Product Name</label>
@@ -458,38 +494,66 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
               {allCategories.filter(c => c !== 'All Categories').map(c => <option key={c as string} value={c as string}>{c as string}</option>)}
             </select>
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <div style={{flex: 1}}>
-                 <label style={{color: '#94a3b8', fontSize: '12px'}}>Price (₹)</label>
-                 <input type="number" value={editProduct.price} onChange={e => setEditProduct({...editProduct, price: e.target.value})} style={inputStyle} />
-              </div>
-              
-              <div style={{flex: 1}}>
-                 <label style={{color: '#94a3b8', fontSize: '12px'}}>Sale Unit</label>
-                 {(editProduct.category.toLowerCase().includes('iron') || editProduct.category.toLowerCase().includes('steel')) ? (
-                   <div style={{...inputStyle, display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>Kg</div>
-                 ) : editProduct.category.toLowerCase().includes('cement') ? (
-                   <div style={{...inputStyle, display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>Bag</div>
-                 ) : (
-                   <select value={editProduct.unit || 'Pc'} onChange={e => setEditProduct({...editProduct, unit: e.target.value})} style={inputStyle}>
-                     <option value="Pc">Pc</option>
-                     <option value="Bag">Bag</option>
-                     <option value="Box">Box</option>
-                     <option value="Kg">Kg</option>
-                     <option value="Mtr">Mtr</option>
-                     <option value="Ltr">Ltr</option>
-                   </select>
-                 )}
-              </div>
-
-              <div style={{flex: 1}}>
-                 <label style={{color: '#10b981', fontSize: '12px', fontWeight: 'bold'}}>Stock Qty</label>
-                 <input type="number" value={editProduct.total_stock} onChange={e => setEditProduct({...editProduct, total_stock: e.target.value})} style={{...inputStyle, border: '1px solid #10b981'}} />
-              </div>
+            {/* SIZES IN EDIT MODE */}
+            <div style={{ marginTop: '15px', marginBottom: '10px', padding: '10px', backgroundColor: '#1e293b', borderRadius: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#38bdf8', fontWeight: 'bold', cursor: 'pointer' }}>
+                <input type="checkbox" checked={editProduct.hasVariants || false} 
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    let initVariants = [{name: '', price: editProduct.price || '', stock: editProduct.total_stock || ''}];
+                    if (checked && editProduct.variants && editProduct.variants.length > 0) initVariants = editProduct.variants;
+                    setEditProduct({...editProduct, hasVariants: checked, variants: initVariants});
+                  }} 
+                style={{ transform: 'scale(1.2)' }} />
+                Manage Multiple Sizes (Variants)
+              </label>
             </div>
 
+            {editProduct.hasVariants ? (
+              <div style={{ backgroundColor: '#1e293b', padding: '10px', borderRadius: '8px', border: '1px solid #334155' }}>
+                {(editProduct.variants || []).map((v:any, i:number) => (
+                  <div key={i} style={{ display: 'flex', gap: '5px', marginBottom: '8px' }}>
+                    <input placeholder="Size" value={v.name} onChange={(e) => { const newV = [...editProduct.variants]; newV[i].name = e.target.value; setEditProduct({...editProduct, variants: newV}); }} style={{...inputStyle, flex: 2, margin: 0, padding: '8px'}} />
+                    <input type="number" placeholder="Price" value={v.price} onChange={(e) => { const newV = [...editProduct.variants]; newV[i].price = e.target.value; setEditProduct({...editProduct, variants: newV}); }} style={{...inputStyle, flex: 1, margin: 0, padding: '8px'}} />
+                    <input type="number" placeholder="Stock" value={v.stock} onChange={(e) => { const newV = [...editProduct.variants]; newV[i].stock = e.target.value; setEditProduct({...editProduct, variants: newV}); }} style={{...inputStyle, flex: 1, margin: 0, padding: '8px'}} />
+                    <button onClick={() => { const newV = editProduct.variants.filter((_:any, idx:number) => idx !== i); setEditProduct({...editProduct, variants: newV}); }} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '8px' }}>✖</button>
+                  </div>
+                ))}
+                <button onClick={() => setEditProduct({...editProduct, variants: [...(editProduct.variants || []), { name: '', price: '', stock: '' }]})} style={{ backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Add Size</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <div style={{flex: 1}}>
+                   <label style={{color: '#94a3b8', fontSize: '12px'}}>Price (₹)</label>
+                   <input type="number" value={editProduct.price} onChange={e => setEditProduct({...editProduct, price: e.target.value})} style={inputStyle} />
+                </div>
+                
+                <div style={{flex: 1}}>
+                   <label style={{color: '#94a3b8', fontSize: '12px'}}>Sale Unit</label>
+                   {(editProduct.category.toLowerCase().includes('iron') || editProduct.category.toLowerCase().includes('steel')) ? (
+                     <div style={{...inputStyle, display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>Kg</div>
+                   ) : editProduct.category.toLowerCase().includes('cement') ? (
+                     <div style={{...inputStyle, display: 'flex', alignItems: 'center', backgroundColor: '#334155', color: '#facc15', border: '1px solid #facc15', fontWeight: 'bold'}}>Bag</div>
+                   ) : (
+                     <select value={editProduct.unit || 'Pc'} onChange={e => setEditProduct({...editProduct, unit: e.target.value})} style={inputStyle}>
+                       <option value="Pc">Pc</option>
+                       <option value="Bag">Bag</option>
+                       <option value="Box">Box</option>
+                       <option value="Kg">Kg</option>
+                       <option value="Mtr">Mtr</option>
+                       <option value="Ltr">Ltr</option>
+                     </select>
+                   )}
+                </div>
+
+                <div style={{flex: 1}}>
+                   <label style={{color: '#10b981', fontSize: '12px'}}>Total Stock</label>
+                   <input type="number" value={editProduct.total_stock} onChange={e => setEditProduct({...editProduct, total_stock: e.target.value})} style={inputStyle} />
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              {/* Return Policy for Edit */}
               <div style={{ flex: 1 }}>
                 <label style={{color: '#94a3b8', fontSize: '12px', fontWeight: 'bold'}}>Return Policy</label>
                 <select value={editProduct.return_policy || 'No Return'} onChange={e => setEditProduct({...editProduct, return_policy: e.target.value})} style={{...inputStyle, border: '1px solid #3b82f6'}}>
@@ -500,7 +564,6 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
               </div>
             </div>
 
-            {/* 🔥 COD EDIT FIELD 🔥 */}
             <div style={{ marginTop: '10px' }}>
               <label style={{color: '#94a3b8', fontSize: '12px', fontWeight: 'bold'}}>Payment Mode</label>
               <div style={{ display: 'flex', gap: '15px', marginTop: '5px', backgroundColor: '#1e293b', padding: '12px', borderRadius: '6px', border: '1px solid #334155' }}>
@@ -546,39 +609,32 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button onClick={() => { setEditProduct(null); setEditImageFiles([]); }} style={{...editBtn, flex: 1, backgroundColor: '#475569'}}>Cancel</button>
-              <button onClick={saveEditedProduct} disabled={isUploading || editProduct.total_stock < 0} style={{...greenBtn, flex: 2, opacity: isUploading ? 0.7 : 1}}>
-                {isUploading ? 'Saving...' : (editProduct.shop_id ? '💾 Update Stock' : '💾 Save & Add to Stock')}
+              <button onClick={saveEditedProduct} disabled={isUploading} style={{...greenBtn, flex: 2, opacity: isUploading ? 0.7 : 1}}>
+                {isUploading ? 'Saving...' : '💾 Save & Update'}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* 🔥 PRODUCT LIST DISPLAY 🔥 */}
       <div>
         {filteredProducts.map((p: any) => {
             const hasStock = p.shop_id === safeShopId && p.total_stock > 0;
             const itemUnit = p.unit || 'Pc'; 
+            
+            const parsedVariants = p.variants ? (typeof p.variants === 'string' ? JSON.parse(p.variants) : p.variants) : [];
+            const isMultiSize = parsedVariants && parsedVariants.length > 0;
+
             return (
             <div key={p.id} style={{ ...cardStyle, borderLeft: hasStock ? '4px solid #10b981' : '1px solid #334155' }}>
               <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', background: '#334155', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  {p.image_url && p.image_url.trim() !== '' ? (
-                    <>
-                      <img src={p.image_url.split(',')[0]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={p.name} />
-                      {p.image_url.split(',').length > 1 && (
-                        <div style={{ position: 'absolute', bottom: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '10px', padding: '2px 4px' }}>
-                          +{p.image_url.split(',').length - 1}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span style={{ fontSize: '24px' }}>📦</span>
-                  )}
+                <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', background: '#334155', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  {p.image_url ? <img src={p.image_url.split(',')[0]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={p.name} /> : <span style={{ fontSize: '24px' }}>📦</span>}
                 </div>
                 <div>
                   <strong style={{color: '#38bdf8', fontSize: '15px'}}>{p.name} {p.is_heavy && <span title="Heavy Delivery Item" style={{fontSize: '14px'}}>🚛</span>}</strong>
                   
-                  {/* 🔥 LIST MEIN BHI RETURN POLICY AUR PAYMENT MODE DIKHEGA 🔥 */}
                   <div style={{color: '#94a3b8', fontSize: '12px', marginTop: '4px'}}>
                     {p.category} | <span style={{color: p.return_policy === 'No Return' ? '#ef4444' : '#10b981'}}>{p.return_policy || 'No Return'}</span> | 
                     <span style={{color: p.is_cod_available === false ? '#38bdf8' : '#10b981', fontWeight: 'bold'}}>
@@ -586,13 +642,22 @@ export default function InventoryTab({ products, fetchProducts, currentShop }: a
                     </span>
                   </div>
 
+                  {/* MULTI SIZE DISPLAY */}
+                  {isMultiSize && (
+                    <div style={{ color: '#facc15', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>
+                      📏 Sizes: {parsedVariants.map((v:any) => v.name).join(', ')}
+                    </div>
+                  )}
+
                   <div style={{color: '#e2e8f0', fontWeight: 'bold', marginTop: '4px', fontSize: '13px'}}>
-                      ₹{p.price} <span style={{color:'#facc15'}}>/ {itemUnit}</span> | Stock: <span style={{color: hasStock ? '#4ade80' : '#f87171'}}>{p.total_stock || 0} {itemUnit}</span>
+                      {isMultiSize ? 'Starts from ' : ''}₹{p.price} <span style={{color:'#facc15'}}>/ {itemUnit}</span> | Stock: <span style={{color: hasStock ? '#4ade80' : '#f87171'}}>{p.total_stock || 0}</span>
                   </div>
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '80px' }}>
-                <button onClick={() => setEditProduct(p)} style={{...editBtn, backgroundColor: hasStock ? '#3b82f6' : '#10b981', padding: '10px 15px'}}>
+                <button onClick={() => {
+                   setEditProduct({...p, hasVariants: isMultiSize, variants: isMultiSize ? parsedVariants : []});
+                }} style={{...editBtn, backgroundColor: hasStock ? '#3b82f6' : '#10b981', padding: '10px 15px'}}>
                    {hasStock ? '✏️ Edit Stock' : '➕ Add to Stock'}
                 </button>
               </div>

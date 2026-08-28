@@ -1,4 +1,4 @@
-package in.fixify.app;
+package in.fixifiy.shop;
 
 import com.getcapacitor.BridgeActivity;
 

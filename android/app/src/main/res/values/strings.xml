@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">fixify</string>
-    <string name="title_activity_main">fixify</string>
-    <string name="package_name">in.fixify.app</string>
-    <string name="custom_url_scheme">in.fixify.app</string>
+    <string name="app_name">Fixifiy Shop</string>
+    <string name="title_activity_main">Fixifiy Shop</string>
+    <string name="package_name">in.fixifiy.shop</string>
+    <string name="custom_url_scheme">in.fixifiy.shop</string>
 </resources>

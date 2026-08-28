@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
 import PermanentFreeCall from '@/components/PermanentFreeCall';
 import { printShopInvoice, printDeliveryChallan, printMiniChallan } from './InvoiceHelper'; 
+// 🔥 IMPORT YOUR NEW ACCEPT BUTTON COMPONENT HERE
+import AcceptOrderButton from './AcceptOrderButton'; 
 
 const ADMIN_COMMISSION_PERCENTAGE = 0.05;
 
@@ -15,6 +17,10 @@ export default function OrderDetailsView({
   const [activeCall, setActiveCall] = useState<{roomId: string, title: string} | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // 🔥 NEW STATES FOR COLLAPSIBLE SECTIONS
+  const [showChatBox, setShowChatBox] = useState(false);
+  const [showReturnPolicySettings, setShowReturnPolicySettings] = useState(false);
 
   const getProductDetailsArray = (order: any) => {
     if (!order) return [];
@@ -215,11 +221,12 @@ export default function OrderDetailsView({
       
       const { error } = await supabase.from(tableName).update({ allow_return: allowReturn, return_window: policyType }).eq('id', orderId);
       if (error) throw error;
+      
+      alert("Return setting updated successfully!");
     } catch (e: any) { alert("Return setting update failed: " + e.message); } 
     finally { setIsProcessing(false); }
   };
 
-  // 🔥 FIX 1: Jab Shop Owner GST ON karega, toh Dukan ka naam aur GSTIN sath mein save hoga 🔥
   const toggleGSTStatus = async (orderId: number, currentStatus: boolean) => {
     const orderToUpdate = orders.find((o:any) => o.id === orderId);
     if (!orderToUpdate) return;
@@ -228,7 +235,6 @@ export default function OrderDetailsView({
     setIsProcessing(true);
     const newStatus = !currentStatus;
     
-    // Dukan ki detail fetch kar rahe hain
     const sName = currentShop?.name || currentShop?.shop_name || 'Verified Retail Partner';
     const sGst = currentShop?.gst_number || currentShop?.gstin || currentShop?.gst || 'Unregistered';
 
@@ -410,7 +416,6 @@ export default function OrderDetailsView({
     finally { setIsProcessing(false); }
   };
 
-  // 🔥 FIX 2: Jab bhi Order Complete ho, Shop details permanently DB me chali jaye 🔥
   const markOrderAsCompleted = async (orderId: number) => {
     const orderToUpdate = orders.find((o:any) => o.id === orderId);
     if (!orderToUpdate) return;
@@ -609,13 +614,11 @@ export default function OrderDetailsView({
   const isCompleted = ['completed', 'complete', 'delivered', 'refunded'].includes(s);
   const isGlobalOrder = !selectedOrder?.shop_id || String(selectedOrder.shop_id) === 'null' || String(selectedOrder.shop_id).trim() === '';
   
-  // Phase Flags
   const isReturnRequested = s === 'return requested';
   const isReturnPickedUp = s === 'return picked up';
   const isReturnAccepted = s === 'return accepted';
   const isReturnPhase = isReturnRequested || isReturnPickedUp || isReturnAccepted;
   
-  // RTO Status check updated to catch variants
   const isRtoPhase = (s.includes('rto') && s !== 'rto received') || s.includes('fail') || s.includes('undeliver');
   const isRtoCompleted = s === 'rto received';
 
@@ -680,7 +683,7 @@ export default function OrderDetailsView({
         </div>
       </div>
 
-      {/* 🔥 COLORFUL & HIGHLIGHTED DELIVERY BOY ASSIGNMENT UI 🔥 */}
+      {/* DELIVERY BOY ASSIGNMENT UI */}
       {!isGlobalOrder && !isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
         <div style={{ 
           background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
@@ -792,14 +795,22 @@ export default function OrderDetailsView({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
                 <div style={{ flex: 1, minWidth: '200px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    
+                    {/* 🔥 ENHANCED IMAGE PREVIEW TRIGGER 🔥 */}
                     {itemImage && !isDelivery && (
-                      <img 
-                        src={itemImage} alt="Thumbnail" 
-                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer', border: '1px solid #334155', backgroundColor: '#334155' }} 
-                        onClick={() => setPreviewImage(itemImage)} 
-                        onError={(e) => { e.currentTarget.src = "https://placehold.co/50x50/1e293b/fff?text=X"; }}
-                      />
+                      <div 
+                        onClick={() => setPreviewImage(itemImage)}
+                        style={{ cursor: 'zoom-in', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      >
+                        <img 
+                          src={itemImage} alt="Thumbnail" 
+                          style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px', border: '2px solid #38bdf8', backgroundColor: '#334155' }} 
+                          onError={(e) => { e.currentTarget.src = "https://placehold.co/60x60/1e293b/fff?text=No+Img"; }}
+                        />
+                        <span style={{fontSize: '10px', color: '#38bdf8', marginTop: '4px'}}>🔍 Zoom</span>
+                      </div>
                     )}
+
                     <div style={{ flex: 1 }}>
                       <strong 
                         style={{ fontSize: '16px', color: '#38bdf8', cursor: itemImage ? 'pointer' : 'default', textDecoration: itemImage ? 'underline' : 'none' }}
@@ -880,11 +891,10 @@ export default function OrderDetailsView({
         </div>
         <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#94a3b8' }}>* Delivery Challan pe Mobile Number nahi hoga (Security for RTO). QR code scan karke details dekhein.</p>
 
-        {/* 🔥 NEW: GST Bill Access Toggle UI 🔥 */}
         <div style={{ marginTop: '15px', padding: '15px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ color: '#cbd5e1', fontSize: '14px', flex: '1 1 200px' }}>
              <strong>📄 Customer GST Bill Access:</strong> <br/>
-             <span style={{ fontSize: '12px', color: '#94a3b8' }}>Agar yeh ON hai, toh customer ko apne app me GST Bill download karne ka option milega. OFF rakhne par sirf Normal Bill dikhega.</span>
+             <span style={{ fontSize: '12px', color: '#94a3b8' }}>Agar yeh ON hai, toh customer ko apne app me GST Bill download karne ka option milega.</span>
           </div>
           <button 
              onClick={() => toggleGSTStatus(selectedOrder.id, selectedOrder?.has_gst)} 
@@ -905,182 +915,194 @@ export default function OrderDetailsView({
         </div>
       </div>
 
-      {/* Operations Center */}
-      <div style={{ backgroundColor: '#0f172a', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
+      {/* 🔥 NEW: COLLAPSIBLE RETURN POLICY SETTINGS 🔥 */}
+      <div style={{ backgroundColor: '#0f172a', padding: '20px', borderRadius: '12px', border: '1px solid #334155', marginBottom: '20px' }}>
+        <button 
+          onClick={() => setShowReturnPolicySettings(!showReturnPolicySettings)}
+          style={{ width: '100%', background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '16px', fontWeight: 'bold', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+        >
+          <span>🔄 Manage Return Policy (Currently: {currentReturnWindow.replace('_', ' ')})</span>
+          <span>{showReturnPolicySettings ? '▲' : '▼'}</span>
+        </button>
         
-        <div style={{ marginBottom: '25px', borderBottom: '1px dashed #334155', paddingBottom: '20px' }}>
-            <h4 style={{ color: '#38bdf8', margin: '0 0 10px 0', fontSize: '16px', textTransform: 'uppercase' }}>🔄 Return Policy Settings</h4>
+        {showReturnPolicySettings && (
+          <div style={{ marginTop: '15px', borderTop: '1px dashed #334155', paddingTop: '15px' }}>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button 
                 onClick={() => updateReturnPolicy(selectedOrder.id, '24_hours')} 
                 disabled={isProcessing}
-                style={{ flex: '1 1 120px', background: currentReturnWindow === '24_hours' ? '#10b981' : '#334155', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer', transition: '0.2s' }}
+                style={{ flex: '1 1 120px', background: currentReturnWindow === '24_hours' ? '#10b981' : '#334155', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer' }}
               >
                 24 Hours
               </button>
               <button 
                 onClick={() => updateReturnPolicy(selectedOrder.id, '7_days')} 
                 disabled={isProcessing}
-                style={{ flex: '1 1 120px', background: currentReturnWindow === '7_days' ? '#3b82f6' : '#334155', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer', transition: '0.2s' }}
+                style={{ flex: '1 1 120px', background: currentReturnWindow === '7_days' ? '#3b82f6' : '#334155', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer' }}
               >
                 7 Days
               </button>
               <button 
                 onClick={() => updateReturnPolicy(selectedOrder.id, 'none')} 
                 disabled={isProcessing}
-                style={{ flex: '1 1 120px', background: currentReturnWindow === 'none' ? '#ef4444' : '#334155', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer', transition: '0.2s' }}
+                style={{ flex: '1 1 120px', background: currentReturnWindow === 'none' ? '#ef4444' : '#334155', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer' }}
               >
                 No Return
               </button>
             </div>
             <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>* Customer can request return within this selected window.</p>
-        </div>
-
-        {/* 🔥 NEW: RTO PHASE 🔥 */}
-        {isRtoPhase && (
-          <div style={{ background: '#451a03', padding: '20px', borderRadius: '12px', border: '2px solid #f59e0b', marginBottom: '25px' }}>
-            <h3 style={{ color: '#fcd34d', marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📦 RTO (Return To Origin) Phase
-            </h3>
-            <p style={{ color: '#fef3c7', fontSize: '14px', marginBottom: '15px' }}>
-              Customer tak item deliver nahi ho paya. Delivery Boy ne ise RTO mark kiya hai. 
-              <br/><br/><strong>Current Status:</strong> {selectedOrder?.status?.toUpperCase()}
-            </p>
-            <div style={{ background: '#78350f', padding: '15px', borderRadius: '8px', border: '1px solid #b45309' }}>
-               <p style={{ color: '#fde68a', margin: '0 0 10px 0', fontSize: '14px' }}><strong>Action Required:</strong> Jab RTO package aapko theek thak mil jaye, tab Verify karke receive karein (Isse stock wapas add ho jayega).</p>
-               <button onClick={() => processRtoReceive(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#f59e0b', width: '100%', padding: '15px', fontSize: '16px' }}>
-                 {isProcessing ? '⏳ Processing...' : '✅ Mark RTO Received & Restock Inventory'}
-               </button>
-            </div>
           </div>
         )}
+      </div>
 
-        {/* RETURN MANAGEMENT SYSTEM */}
-        {isReturnPhase ? (
-          <div style={{ background: '#3f1d1d', padding: '20px', borderRadius: '12px', border: '2px solid #ef4444', marginBottom: '25px' }}>
-            <h3 style={{ color: '#fca5a5', marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🚨 Return & Verification Phase
-            </h3>
-            
-            <p style={{ color: '#f8fafc', fontSize: '14px', marginBottom: '15px' }}>
-              <strong>Current Status:</strong> <span style={{color: '#fcd34d'}}>{selectedOrder?.status?.toUpperCase()}</span><br/>
-              Yeh order customer ne return ke liye request kiya hai. Niche diye gaye steps follow karein:
-            </p>
-
-            {isReturnRequested && (
-              <div style={{ background: '#7f1d1d', padding: '15px', borderRadius: '8px' }}>
-                <p style={{ color: '#fecaca', margin: '0 0 10px 0', fontSize: '13px' }}>Step 1: Customer ki return request aayi hai. Reason check karke Accept ya Reject karein.</p>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button onClick={() => acceptReturnRequest(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#f59e0b', flex: 1 }}>
-                    {isProcessing ? '⏳...' : '✅ Accept Return Request'}
-                  </button>
-                  <button onClick={() => rejectReturnRequest(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#ef4444', flex: 1 }}>
-                    {isProcessing ? '⏳...' : '❌ Reject Return'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {isReturnAccepted && (
-              <div style={{ background: '#7f1d1d', padding: '15px', borderRadius: '8px', marginTop: isReturnRequested ? '10px' : '0' }}>
-                <p style={{ color: '#fecaca', margin: '0 0 10px 0', fontSize: '13px' }}>Step 2: Return Pickup ke liye upar list se <strong>Delivery Partner</strong> assign karein jo item wapas la sake.</p>
-                {!selectedOrder.delivery_boy_id ? (
-                   <span style={{ color: '#fcd34d', fontWeight: 'bold' }}>⚠️ Delivery Boy is not assigned yet.</span>
-                ) : (
-                   <span style={{ color: '#4ade80', fontWeight: 'bold' }}>✅ Delivery Boy Assigned. Waiting for boy to pick up...</span>
-                )}
-              </div>
-            )}
-
-            {isReturnPickedUp && (
-              <div style={{ background: '#064e3b', padding: '15px', borderRadius: '8px', marginTop: '10px', border: '1px solid #10b981' }}>
-                <p style={{ color: '#a7f3d0', margin: '0 0 10px 0', fontSize: '14px', lineHeight: '1.5' }}>
-                  <strong>Step 3: Verify Item & Send Admin Command</strong><br/>
-                  Delivery boy ne item pick kar liya hai. Jab item aapko shop pe sahi salamat mil jaye, tab Verify karke niche wala button dabayein.
-                </p>
-                
-                {selectedOrder.return_image_url && (
-                  <div style={{ marginBottom: '15px', background: '#022c22', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ color: '#6ee7b7', fontSize: '13px', margin: '0 0 5px 0' }}>📸 Pickup Proof (Uploaded by Boy):</p>
-                    <img src={selectedOrder.return_image_url} alt="Proof" onClick={() => setPreviewImage(selectedOrder.return_image_url)} style={{ maxWidth: '100%', height: '120px', borderRadius: '8px', cursor: 'pointer', border: '2px solid #10b981' }}/>
-                  </div>
-                )}
-                
-                <button onClick={() => processRefundAndRestock(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#10b981', width: '100%', padding: '15px', fontSize: '16px' }}>
-                  {isProcessing ? '⏳ Processing...' : '📦 Item Received at Shop (Verify & Refund Customer)'}
-                </button>
-              </div>
-            )}
+      {/* RTO PHASE */}
+      {isRtoPhase && (
+        <div style={{ background: '#451a03', padding: '20px', borderRadius: '12px', border: '2px solid #f59e0b', marginBottom: '25px' }}>
+          <h3 style={{ color: '#fcd34d', marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            📦 RTO (Return To Origin) Phase
+          </h3>
+          <p style={{ color: '#fef3c7', fontSize: '14px', marginBottom: '15px' }}>
+            Customer tak item deliver nahi ho paya. Delivery Boy ne ise RTO mark kiya hai. 
+            <br/><br/><strong>Current Status:</strong> {selectedOrder?.status?.toUpperCase()}
+          </p>
+          <div style={{ background: '#78350f', padding: '15px', borderRadius: '8px', border: '1px solid #b45309' }}>
+             <p style={{ color: '#fde68a', margin: '0 0 10px 0', fontSize: '14px' }}><strong>Action Required:</strong> Jab RTO package aapko theek thak mil jaye, tab Verify karke receive karein (Isse stock wapas add ho jayega).</p>
+             <button onClick={() => processRtoReceive(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#f59e0b', width: '100%', padding: '15px', fontSize: '16px' }}>
+               {isProcessing ? '⏳ Processing...' : '✅ Mark RTO Received & Restock Inventory'}
+             </button>
           </div>
-        ) : null}
+        </div>
+      )}
 
-        {/* Normal Action Buttons */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-          
-          {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
-            <>
-              <button onClick={() => updateOrderStatus(selectedOrder.id, 'accepted')} style={{ ...actionBtnStyle, backgroundColor: '#10b981' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '✅ Accept Normal'}</button>
-              <button onClick={() => sendToCustomerApproval(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#f59e0b' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '⚠️ Send to Customer Approval'}</button>
-              <button onClick={() => updateOrderStatus(selectedOrder.id, 'out_for_delivery')} style={{ ...actionBtnStyle, backgroundColor: '#a855f7' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '🛵 Mark Out for Delivery'}</button>
-            </>
-          )}
+      {/* RETURN MANAGEMENT SYSTEM */}
+      {isReturnPhase ? (
+        <div style={{ background: '#3f1d1d', padding: '20px', borderRadius: '12px', border: '2px solid #ef4444', marginBottom: '25px' }}>
+          <h3 style={{ color: '#fca5a5', marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>🚨 Return & Verification Phase</h3>
+          <p style={{ color: '#f8fafc', fontSize: '14px', marginBottom: '15px' }}><strong>Current Status:</strong> <span style={{color: '#fcd34d'}}>{selectedOrder?.status?.toUpperCase()}</span></p>
 
-          <button onClick={() => openCustomerChat(selectedOrder)} style={{ ...actionBtnStyle, backgroundColor: '#25d366' }}>💬 WhatsApp Customer</button>
-          <button onClick={() => handleInitiateCall(selectedOrder)} style={{ ...actionBtnStyle, backgroundColor: '#16a34a' }}>📞 Free Internet Call</button>
-          
-          {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
-            <button onClick={() => updateLiveLocation(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#0284c7' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '📍 Update Live Location'}</button>
+          {isReturnRequested && (
+            <div style={{ background: '#7f1d1d', padding: '15px', borderRadius: '8px' }}>
+              <p style={{ color: '#fecaca', margin: '0 0 10px 0', fontSize: '13px' }}>Step 1: Customer ki return request aayi hai. Reason check karke Accept ya Reject karein.</p>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button onClick={() => acceptReturnRequest(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#f59e0b', flex: 1 }}>{isProcessing ? '⏳...' : '✅ Accept Return Request'}</button>
+                <button onClick={() => rejectReturnRequest(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#ef4444', flex: 1 }}>{isProcessing ? '⏳...' : '❌ Reject Return'}</button>
+              </div>
+            </div>
           )}
-          
-          {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
-            <button onClick={() => editEntireOrderDeliveryTime(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#6366f1' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '⏱️ Reschedule Delivery Date/Time'}</button>
+          {isReturnAccepted && (
+            <div style={{ background: '#7f1d1d', padding: '15px', borderRadius: '8px', marginTop: isReturnRequested ? '10px' : '0' }}>
+              <p style={{ color: '#fecaca', margin: '0 0 10px 0', fontSize: '13px' }}>Step 2: Return Pickup ke liye upar list se <strong>Delivery Partner</strong> assign karein.</p>
+            </div>
           )}
-          
-          {(s === 'out_for_delivery' || s.includes('out') || s.includes('transit')) && (
-            <button onClick={() => markDeliveryFailed(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#f97316' }} disabled={isProcessing}>{isProcessing ? '⏳...' : '❌ Mark Delivery Failed (RTO)'}</button>
-          )}
-          
-          {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
-            <div style={{ gridColumn: '1 / -1', marginTop: '10px' }}>
-              <button onClick={() => markOrderAsCompleted(selectedOrder.id)} style={{ width: '100%', padding: '16px', backgroundColor: isCompleted ? '#334155' : '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '18px', cursor: isCompleted || isProcessing ? 'not-allowed' : 'pointer', boxShadow: isCompleted ? 'none' : '0 4px 10px rgba(239, 68, 68, 0.3)', opacity: isProcessing ? 0.7 : 1 }} disabled={isCompleted || isProcessing}>
-                {isProcessing ? '⏳ PROCESSING...' : (isCompleted ? '✅ ALREADY DELIVERED' : '🏁 Mark Delivered & Add to Wallet')}
+          {isReturnPickedUp && (
+            <div style={{ background: '#064e3b', padding: '15px', borderRadius: '8px', marginTop: '10px', border: '1px solid #10b981' }}>
+              <p style={{ color: '#a7f3d0', margin: '0 0 10px 0', fontSize: '14px' }}><strong>Step 3: Verify Item & Send Admin Command</strong><br/>Jab item aapko shop pe mil jaye, tab Verify karein.</p>
+              <button onClick={() => processRefundAndRestock(selectedOrder.id)} disabled={isProcessing} style={{ ...actionBtnStyle, backgroundColor: '#10b981', width: '100%', padding: '15px' }}>
+                {isProcessing ? '⏳ Processing...' : '📦 Item Received at Shop (Verify & Refund Customer)'}
               </button>
             </div>
           )}
         </div>
+      ) : null}
+
+      {/* Normal Action Buttons */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+        
+        {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
+          <>
+            {/* 🔥 NEW ACCEPT BUTTON (WITH UPI LOCK) 🔥 */}
+            <AcceptOrderButton 
+              orderId={selectedOrder.id} 
+              currentStatus={selectedOrder.status} 
+              paymentMethod={selectedOrder.payment_method} 
+              paymentStatus={selectedOrder.payment_status} 
+              onStatusChange={fetchOrders} 
+            />
+            
+            <button onClick={() => sendToCustomerApproval(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#f59e0b' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '⚠️ Send to Customer Approval'}</button>
+            <button onClick={() => updateOrderStatus(selectedOrder.id, 'out_for_delivery')} style={{ ...actionBtnStyle, backgroundColor: '#a855f7' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '🛵 Mark Out for Delivery'}</button>
+          </>
+        )}
+
+        <button onClick={() => openCustomerChat(selectedOrder)} style={{ ...actionBtnStyle, backgroundColor: '#25d366' }}>💬 WhatsApp Customer</button>
+        <button onClick={() => handleInitiateCall(selectedOrder)} style={{ ...actionBtnStyle, backgroundColor: '#16a34a' }}>📞 Free Internet Call</button>
+        
+        {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
+          <button onClick={() => updateLiveLocation(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#0284c7' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '📍 Update Live Location'}</button>
+        )}
+        
+        {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
+          <button onClick={() => editEntireOrderDeliveryTime(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#6366f1' }} disabled={isCompleted || isProcessing}>{isProcessing ? '⏳...' : '⏱️ Reschedule Delivery Date/Time'}</button>
+        )}
+        
+        {(s === 'out_for_delivery' || s.includes('out') || s.includes('transit')) && (
+          <button onClick={() => markDeliveryFailed(selectedOrder.id)} style={{ ...actionBtnStyle, backgroundColor: '#f97316' }} disabled={isProcessing}>{isProcessing ? '⏳...' : '❌ Mark Delivery Failed (RTO)'}</button>
+        )}
+        
+        {!isReturnPhase && !s.includes('refund') && !isRtoPhase && !isRtoCompleted && (
+          <div style={{ gridColumn: '1 / -1', marginTop: '10px' }}>
+            <button onClick={() => markOrderAsCompleted(selectedOrder.id)} style={{ width: '100%', padding: '16px', backgroundColor: isCompleted ? '#334155' : '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '18px', cursor: isCompleted || isProcessing ? 'not-allowed' : 'pointer', boxShadow: isCompleted ? 'none' : '0 4px 10px rgba(239, 68, 68, 0.3)', opacity: isProcessing ? 0.7 : 1 }} disabled={isCompleted || isProcessing}>
+              {isProcessing ? '⏳ PROCESSING...' : (isCompleted ? '✅ ALREADY DELIVERED' : '🏁 Mark Delivered & Add to Wallet')}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Chat Section */}
-      <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', border: '1px solid #334155', marginTop: '20px' }}>
-        <h3 style={{ color: '#38bdf8', marginTop: 0, fontSize: '16px' }}>💬 Chat with Customer</h3>
-        <div style={{ height: '250px', overflowY: 'auto', backgroundColor: '#1e293b', padding: '10px', borderRadius: '8px', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {(() => {
-            let displayMsgs = selectedOrder?.messages;
-            if (typeof displayMsgs === 'string') { try { displayMsgs = JSON.parse(displayMsgs); } catch(e) { displayMsgs = []; } }
-            if (!Array.isArray(displayMsgs)) displayMsgs = [];
-            if (displayMsgs.length === 0) return <p style={{color: '#64748b', textAlign: 'center'}}>No messages yet.</p>;
+      {/* 🔥 NEW: COLLAPSIBLE IN-APP CHAT SECTION 🔥 */}
+      <div style={{ backgroundColor: '#0f172a', padding: '20px', borderRadius: '12px', border: '1px solid #334155', marginTop: '20px' }}>
+        <button 
+          onClick={() => setShowChatBox(!showChatBox)}
+          style={{ width: '100%', background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '16px', fontWeight: 'bold', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+        >
+          <span>💬 In-App Customer Chat</span>
+          <span>{showChatBox ? '▲' : '▼'}</span>
+        </button>
 
-            return displayMsgs.map((msg: any, idx: number) => (
-              <div key={idx} style={{ alignSelf: msg.sender === 'shop' || msg.sender === 'admin' ? 'flex-end' : 'flex-start', backgroundColor: msg.sender === 'shop' || msg.sender === 'admin' ? '#10b981' : '#334155', color: 'white', padding: '8px 12px', borderRadius: '8px', maxWidth: '80%', fontSize: '13px' }}>
-                <div style={{ fontSize: '10px', color: '#e2e8f0', marginBottom: '4px' }}>{msg.sender === 'customer' ? 'Customer' : 'You (Shop)'}</div>
-                <div>{msg.text}</div>
-                {msg.imageUrl && <img src={msg.imageUrl} alt="attachment" style={{width: '100%', marginTop: '5px', borderRadius: '4px'}}/>}
-              </div>
-            ));
-          })()}
-        </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <input type="text" value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendReply()} placeholder="Type a reply to customer..." disabled={isProcessing} style={{ flex: 1, minWidth: '200px', padding: '12px', borderRadius: '6px', border: '1px solid #334155', backgroundColor: '#1e293b', color: 'white', outline: 'none' }} />
-          <button onClick={handleSendReply} disabled={isProcessing} style={{ flex: '0 0 auto', backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', padding: '10px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer' }}>{isProcessing ? '⏳' : 'Send Reply'}</button>
-        </div>
+        {showChatBox && (
+          <div style={{ marginTop: '15px' }}>
+            <div style={{ height: '250px', overflowY: 'auto', backgroundColor: '#1e293b', padding: '10px', borderRadius: '8px', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {(() => {
+                let displayMsgs = selectedOrder?.messages;
+                if (typeof displayMsgs === 'string') { try { displayMsgs = JSON.parse(displayMsgs); } catch(e) { displayMsgs = []; } }
+                if (!Array.isArray(displayMsgs)) displayMsgs = [];
+                if (displayMsgs.length === 0) return <p style={{color: '#64748b', textAlign: 'center'}}>No messages yet.</p>;
+
+                return displayMsgs.map((msg: any, idx: number) => (
+                  <div key={idx} style={{ alignSelf: msg.sender === 'shop' || msg.sender === 'admin' ? 'flex-end' : 'flex-start', backgroundColor: msg.sender === 'shop' || msg.sender === 'admin' ? '#10b981' : '#334155', color: 'white', padding: '8px 12px', borderRadius: '8px', maxWidth: '80%', fontSize: '13px' }}>
+                    <div style={{ fontSize: '10px', color: '#e2e8f0', marginBottom: '4px' }}>{msg.sender === 'customer' ? 'Customer' : 'You (Shop)'}</div>
+                    <div>{msg.text}</div>
+                    {msg.imageUrl && <img src={msg.imageUrl} alt="attachment" style={{width: '100%', marginTop: '5px', borderRadius: '4px'}}/>}
+                  </div>
+                ));
+              })()}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input type="text" value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendReply()} placeholder="Type a reply to customer..." disabled={isProcessing} style={{ flex: 1, minWidth: '200px', padding: '12px', borderRadius: '6px', border: '1px solid #334155', backgroundColor: '#1e293b', color: 'white', outline: 'none' }} />
+              <button onClick={handleSendReply} disabled={isProcessing} style={{ flex: '0 0 auto', backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', padding: '10px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: isProcessing ? 'wait' : 'pointer' }}>{isProcessing ? '⏳' : 'Send Reply'}</button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Image Lightbox */}
+      {/* 🔥 ENHANCED IMAGE LIGHTBOX PREVIEW 🔥 */}
       {previewImage && (
-        <div style={{position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999}} onClick={() => setPreviewImage(null)}>
-          <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <button onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }} style={{ position: 'absolute', top: '-40px', right: '0', background: 'transparent', border: 'none', color: '#fff', fontSize: '35px', cursor: 'pointer', fontWeight: 'bold' }}>&times;</button>
-            <img src={previewImage} alt="Large Product Preview" style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.8)', backgroundColor: '#fff' }} onClick={(e) => e.stopPropagation()} />
+        <div 
+          style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '20px', boxSizing: 'border-box' }} 
+          onClick={() => setPreviewImage(null)}
+        >
+          <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', maxWidth: '100%', maxHeight: '100%' }}>
+            <button 
+              onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }} 
+              style={{ position: 'absolute', top: '-40px', right: '0', background: 'transparent', border: 'none', color: '#fff', fontSize: '35px', cursor: 'pointer', fontWeight: 'bold', zIndex: 100000 }}
+            >
+              &times;
+            </button>
+            <img 
+              src={previewImage} 
+              alt="Preview" 
+              style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,1)' }} 
+              onClick={(e) => e.stopPropagation()} 
+            />
           </div>
         </div>
       )}
